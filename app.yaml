@@ -9,9 +9,9 @@ env:
 
   # >>> EDIT THESE: where your gold tables live <<<
   - name: DATABRICKS_CATALOG
-    value: "<catalog>"
+    value: "workspace"
   - name: DATABRICKS_SCHEMA
-    value: "<schema>"
+    value: "default"
 
   # ---- Optional ----------------------------------------------------------------
   # Run queries as the signed-in user instead of the app's service principal:

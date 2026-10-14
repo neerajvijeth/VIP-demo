@@ -73,7 +73,7 @@ databricks.yml       optional Databricks Asset Bundle
 You need **Node 20+**, the **Databricks CLI**, and access to a Databricks workspace with a SQL warehouse and the three tables.
 
 ```bash
-git clone https://github.com/neerajvijeth/VIP-demo.git
+git clone https://github.com/neerajv-dpw/VIP-demo.git
 cd VIP-demo
 npm install
 
