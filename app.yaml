@@ -1,0 +1,31 @@
+# Databricks Apps runtime config. See README.md ("Deploy to Databricks Apps").
+command: ["npm", "run", "start"]
+env:
+  # Injected from the app resources you attach (see README): SQL warehouse and Genie space.
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  - name: GENIE_SPACE_ID
+    valueFrom: genie-space
+
+  # >>> EDIT THESE: where your gold tables live <<<
+  - name: DATABRICKS_CATALOG
+    value: "<catalog>"
+  - name: DATABRICKS_SCHEMA
+    value: "<schema>"
+
+  # ---- Optional ----------------------------------------------------------------
+  # Run queries as the signed-in user instead of the app's service principal:
+  # - name: USE_OBO
+  #   value: "true"
+  # Cost / limits:
+  # - name: CACHE_TTL_SECONDS
+  #   value: "300"
+  # - name: EXPORT_MAX_ROWS
+  #   value: "1000000"
+  # Different table / column names or values (see README "Adapting to your data"):
+  # - name: TABLE_ASSETS
+  #   value: "gold_assets"
+  # - name: COLUMN_MAP
+  #   value: '{"kev_flag":"is_known_exploited"}'
+  # - name: HIGH_SEVERITIES
+  #   value: "Critical,High"

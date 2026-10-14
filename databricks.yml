@@ -1,0 +1,33 @@
+# Databricks Asset Bundle for `databricks bundle deploy`
+# Supply the ids when deploying:
+#   databricks bundle deploy --var warehouse_id=<id> --var genie_space_id=<id>
+bundle:
+  name: vulnerability-intelligence-platform
+
+variables:
+  warehouse_id:
+    description: SQL warehouse the app queries (the app gets CAN USE)
+  genie_space_id:
+    description: Genie space id (the Chatbot needs it)
+
+resources:
+  apps:
+    vip:
+      name: vuln-intel-platform
+      description: Vulnerability Intelligence Platform
+      source_code_path: .
+      resources:
+        - name: sql-warehouse
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+        - name: genie-space
+          genie_space:
+            name: IT Asset and Vulnerability Management
+            space_id: ${var.genie_space_id}
+            permission: CAN_RUN
+
+targets:
+  dev:
+    mode: development
+    default: true
