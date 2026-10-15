@@ -15,6 +15,7 @@ import { kpisRouter } from './routes/kpis';
 import { genieRouter } from './routes/genie';
 import { customRouter } from './routes/custom';
 import { savedRouter } from './routes/saved';
+import { canvasRouter } from './routes/canvas';
 import { hasLiveColumns } from './fieldCatalog';
 import { ensureFreshSchema } from './schema';
 import { userToken } from './auth';
@@ -56,6 +57,7 @@ app.use('/api/kpis', kpisRouter);
 app.use('/api/genie', genieRouter);
 app.use('/api/custom', customRouter);
 app.use('/api/saved', savedRouter);
+app.use('/api/canvas', canvasRouter);
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 
 // Static SPA (built client)

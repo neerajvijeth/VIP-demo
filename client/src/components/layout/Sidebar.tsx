@@ -1,9 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Bookmark, ChevronsLeft, ChevronsRight, Copy, LayoutDashboard, Pencil, Server, ShieldAlert, Terminal, Trash2, Users } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
-import { SavedApi, useMe, useSavedSql } from '@/lib/savedQueries';
-import { useCustomSql } from '@/store/customSql';
-import { toast } from '@/store/toast';
+import { Bookmark, BookmarkCheck, ChevronsLeft, ChevronsRight, LayoutDashboard, LayoutGrid, Server, ShieldAlert, Terminal, Trash2 } from 'lucide-react';
 import type { Entity } from '@shared/types';
 import { cn, fmtCompact } from '@/lib/utils';
 import { useTotalCount } from '@/lib/hooks';
@@ -22,46 +18,14 @@ function CountBadge({ entity }: { entity: Entity }) {
   return <span className="num text-[11px] text-muted-foreground" title={`${q.data.total.toLocaleString()} ${ENTITY[entity].label.toLowerCase()} (latest snapshot)`}>{fmtCompact(q.data.total)}</span>;
 }
 
-function SavedSqlList({ onNavigate }: { onNavigate?: () => void }) {
-  const list = useSavedSql();
-  const me = useMe();
-  const qc = useQueryClient();
-  const navigate = useNavigate();
-  const run = async (fn: () => Promise<unknown>, ok: string) => {
-    try { await fn(); await qc.invalidateQueries({ queryKey: ['saved-sql'] }); toast.success(ok); } catch (e: any) { toast.error('Failed', e?.message); }
-  };
-  if (list.isError || !list.data?.length) return null;
-  const btn = 'hidden rounded p-1 text-muted-foreground hover:text-foreground group-hover:block';
-  return (
-    <div className="mt-2">
-      <div className="px-2.5 pb-0.5 text-[11px] text-muted-foreground/80">SQL queries</div>
-      {list.data.map((q) => {
-        const mine = q.owner === me.data;
-        return (
-          <div key={q.id} className="group flex items-center rounded-md hover:bg-muted">
-            <button className="flex min-w-0 flex-1 items-center gap-1.5 px-2.5 py-1.5 text-left text-sm text-muted-foreground group-hover:text-foreground" title={`${q.name} · v${q.version}${mine ? '' : ' · shared by ' + q.owner}`}
-              onClick={() => { useCustomSql.getState().setSql(q.sql); navigate(`/dashboard/sql?q=${q.id}`); onNavigate?.(); }}>
-              <span className="truncate">{q.name}</span>{q.visibility === 'team' && <Users size={11} className="shrink-0 opacity-60" aria-label="Shared" />}
-            </button>
-            <button className={btn} aria-label={`Duplicate ${q.name}`} title="Duplicate" onClick={() => void run(() => SavedApi.duplicate(q.id), 'Duplicated')}><Copy size={13} /></button>
-            {mine && <>
-              <button className={btn} aria-label={`Rename ${q.name}`} title="Rename" onClick={() => { const n = window.prompt('Rename query', q.name); if (n?.trim()) void run(() => SavedApi.update(q.id, { name: n.trim() }), 'Renamed'); }}><Pencil size={13} /></button>
-              <button className={btn} aria-label={q.visibility === 'team' ? 'Make private' : 'Share with team'} title={q.visibility === 'team' ? 'Make private' : 'Share with team'} onClick={() => void run(() => SavedApi.update(q.id, { visibility: q.visibility === 'team' ? 'private' : 'team' }), 'Sharing updated')}><Users size={13} /></button>
-              <button className={`${btn} hover:!text-sev-critical`} aria-label={`Delete ${q.name}`} title="Delete" onClick={() => { if (window.confirm(`Delete “${q.name}”?`)) void run(() => SavedApi.remove(q.id), 'Deleted'); }}><Trash2 size={13} /></button>
-            </>}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function SidebarBody({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const items = [
     { to: '/dashboard/overview', label: 'Overview', icon: LayoutDashboard, entity: null as Entity | null },
     { to: '/dashboard/assets', label: 'Assets', icon: Server, entity: 'assets' as Entity },
     { to: '/dashboard/vulnerabilities', label: 'Vulnerabilities', icon: ShieldAlert, entity: 'vulnerabilities' as Entity },
     { to: '/dashboard/sql', label: 'Custom SQL', icon: Terminal, entity: null as Entity | null },
+    { to: '/dashboard/saved', label: 'Saved queries', icon: BookmarkCheck, entity: null as Entity | null },
+    { to: '/dashboard/canvas', label: 'Canvas', icon: LayoutGrid, entity: null as Entity | null },
   ];
   const { views, remove } = useSaved();
   const navigate = useNavigate();
@@ -89,7 +53,7 @@ function SidebarBody({ collapsed, onNavigate }: { collapsed: boolean; onNavigate
           <div className="eyebrow flex items-center gap-2 px-2.5 pb-1">
             <Bookmark size={12} /> Saved views
           </div>
-          {views.length === 0 && <p className="px-2.5 py-1 text-xs text-muted-foreground/80">Save a query from the Assets, Vulnerabilities or Custom SQL page.</p>}
+          {views.length === 0 && <p className="px-2.5 py-1 text-xs text-muted-foreground/80">Save a query from the Assets or Vulnerabilities page.</p>}
           {(['assets', 'vulnerabilities'] as Entity[]).map((e) => {
             const list = views.filter((v) => v.entity === e);
             if (!list.length) return null;
@@ -117,7 +81,6 @@ function SidebarBody({ collapsed, onNavigate }: { collapsed: boolean; onNavigate
               </div>
             );
           })}
-          <SavedSqlList onNavigate={onNavigate} />
         </div>
       )}
     </div>

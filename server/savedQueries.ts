@@ -25,7 +25,7 @@ function write(mut: (d: Doc) => void) {
 }
 
 export const userOf = (req?: Request) => String(req?.headers['x-forwarded-email'] ?? req?.headers['x-forwarded-preferred-username'] ?? process.env.USER ?? 'local-user').slice(0, 200);
-class HttpError extends BuilderError { constructor(m: string, public status: number) { super(m); } }
+export class HttpError extends BuilderError { constructor(m: string, public status: number) { super(m); } }
 const canRead = (q: SavedQuery, u: string) => q.owner === u || q.visibility === 'team';
 const text = (v: unknown, max: number, what: string, req = false) => { const s = typeof v === 'string' ? v.trim() : ''; if (!s && req) throw new BuilderError(`${what} is required`); if (s.length > max) throw new BuilderError(`${what} is too long`); return s; };
 
@@ -59,6 +59,14 @@ export async function remove(id: string, u: string) {
   const r = get(id, u);
   if (r.current.owner !== u) throw new HttpError('Only the owner can delete this query', 403);
   await write((d) => { delete d.queries[id]; });
+}
+/** The query as of a version (undefined = latest). Same read permission as get(). */
+export function getVersion(id: string, u: string, version?: number): SavedQuery {
+  const r = get(id, u);
+  if (version === undefined || version === r.current.version) return r.current;
+  const v = r.versions.find((x) => x.version === version);
+  if (!v) throw new HttpError(`Version ${version} not found`, 404);
+  return v;
 }
 export const duplicate = (id: string, u: string) => { const r = get(id, u); return create({ name: `${r.current.name} (copy)`, description: r.current.description, sql: r.current.sql }, u); };
 export const versions = (id: string, u: string) => { const r = get(id, u); return [r.current, ...[...r.versions].reverse()].map((v) => ({ version: v.version, updated_at: v.updated_at })); };

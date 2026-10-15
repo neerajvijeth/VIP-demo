@@ -1,7 +1,7 @@
 import { Command } from 'cmdk';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useNavigate } from 'react-router-dom';
-import { Bookmark, LayoutDashboard, MessageSquare, Moon, Server, ShieldAlert, Terminal, Wand2 } from 'lucide-react';
+import { Bookmark, BookmarkCheck, LayoutGrid, LayoutDashboard, MessageSquare, Moon, Server, ShieldAlert, Terminal, Wand2 } from 'lucide-react';
 import { useUi } from '@/store/ui';
 import { useSaved } from '@/store/saved';
 import { builderStore } from '@/store/builder';
@@ -37,6 +37,8 @@ export function CommandPalette() {
                 <Command.Item className={itemCls} onSelect={go(() => navigate('/dashboard/assets'))}><Server size={15} /> Assets <span className="ml-auto mono text-[11px] text-muted-foreground">g a</span></Command.Item>
                 <Command.Item className={itemCls} onSelect={go(() => navigate('/dashboard/vulnerabilities'))}><ShieldAlert size={15} /> Vulnerabilities <span className="ml-auto mono text-[11px] text-muted-foreground">g v</span></Command.Item>
                 <Command.Item className={itemCls} onSelect={go(() => navigate('/dashboard/sql'))}><Terminal size={15} /> Custom SQL <span className="ml-auto mono text-[11px] text-muted-foreground">g s</span></Command.Item>
+                <Command.Item className={itemCls} onSelect={go(() => navigate('/dashboard/saved'))}><BookmarkCheck size={15} /> Saved queries</Command.Item>
+                <Command.Item className={itemCls} onSelect={go(() => navigate('/dashboard/canvas'))}><LayoutGrid size={15} /> Canvas</Command.Item>
                 <Command.Item className={itemCls} onSelect={go(() => navigate('/chat'))}><MessageSquare size={15} /> Chatbot <span className="ml-auto mono text-[11px] text-muted-foreground">g c</span></Command.Item>
               </Command.Group>
               <Command.Group heading="Quick-filter presets">
