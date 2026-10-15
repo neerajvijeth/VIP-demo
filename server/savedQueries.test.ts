@@ -42,3 +42,48 @@ describe('saved queries', () => {
     await expect(S.create({ name: '', sql: 'SELECT 1' }, 'ann')).rejects.toThrow(/name/);
   });
 });
+
+describe('builder (Assets / Vulnerabilities) queries', () => {
+  const payload = (over: any = {}) => ({ tree: { type: 'group', op: 'AND', not: false, children: [{ type: 'condition', field: 'asset_class', operator: 'is', value: 'Server', not: false }] }, columns: ['hostname', 'asset_class'], sort: null, options: { latestSnapshotOnly: true, validOnly: true }, mode: 'rows', ...over });
+  it('stores the typed spec (never SQL) and regenerates parameterised SQL on resolve', async () => {
+    const { resolve } = await import('./savedResolve');
+    const q = await S.create({ kind: 'builder', entity: 'assets', name: 'servers', payload: payload(), sql: 'DROP TABLE x' }, 'ann');
+    expect(q.kind).toBe('builder');
+    expect(q.sql).toBe('');
+    const r = resolve(q);
+    expect(r.sql).toMatch(/SELECT .*hostname.*FROM/s);
+    expect(Object.values(r.params)).toContain('Server');
+    expect(r.sql).not.toContain('Server');
+  });
+  it('summary mode resolves to a labelled aggregate', async () => {
+    const { resolve } = await import('./savedResolve');
+    const q = await S.create({ kind: 'builder', entity: 'assets', name: 'by bu', payload: payload({ mode: 'summary', summary: { groupBy: [{ field: 'business_unit' }], metrics: [{ fn: 'count_distinct', field: 'gold_asset_id' }], sort: null, limit: 50 } }) }, 'ann');
+    expect(resolve(q).sql).toMatch(/AS `Business Unit`/);
+  });
+  it('rejects an invalid spec on save and on edit (unknown field, bad operator, missing tree, wrong entity)', async () => {
+    const bad = (p: any, entity: any = 'assets') => expect(S.create({ kind: 'builder', entity, name: 'bad', payload: p }, 'ann')).rejects.toThrow();
+    await bad(payload({ tree: { type: 'group', op: 'AND', not: false, children: [{ type: 'condition', field: 'no_such_col`;--', operator: 'is', value: 'x', not: false }] } }));
+    await bad(payload({ tree: { type: 'group', op: 'AND', not: false, children: [{ type: 'condition', field: 'asset_class', operator: 'is; DROP', value: 'x', not: false }] } }));
+    await bad({ columns: [] });
+    await bad(payload(), 'users');
+    const q = await S.create({ kind: 'builder', entity: 'assets', name: 'ok', payload: payload() }, 'ann');
+    await expect(S.update(q.id, { payload: { tree: { type: 'group', op: 'AND', not: false, children: [{ type: 'condition', field: 'nope', operator: 'is', value: 'x', not: false }] } } }, 'ann')).rejects.toThrow();
+  });
+  it('a payload change makes version n+1 and rollback restores it; a rename does not', async () => {
+    const q = await S.create({ kind: 'builder', entity: 'assets', name: 'v', payload: payload() }, 'ann');
+    const changed = payload({ columns: ['hostname'] });
+    expect((await S.update(q.id, { name: 'renamed' }, 'ann')).version).toBe(1);
+    expect((await S.update(q.id, { payload: changed }, 'ann')).version).toBe(2);
+    expect((await S.update(q.id, { payload: changed }, 'ann')).version).toBe(2); // same payload: no new version
+    const rb = await S.rollback(q.id, 1, 'ann');
+    expect(rb.version).toBe(3);
+    expect(rb.payload?.columns).toEqual(['hostname', 'asset_class']);
+  });
+  it('records saved before builder queries existed read as SQL; duplicate keeps the kind', async () => {
+    const q = await S.create({ kind: 'builder', entity: 'vulnerabilities', name: 'vv', payload: payload({ columns: null }) }, 'ann');
+    const d = await S.duplicate(q.id, 'ann');
+    expect(d.kind).toBe('builder');
+    expect(d.entity).toBe('vulnerabilities');
+    expect(S.list('ann').every((x) => x.kind === 'sql' || x.kind === 'builder')).toBe(true);
+  });
+});

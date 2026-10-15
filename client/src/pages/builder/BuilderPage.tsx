@@ -22,7 +22,7 @@ import { DetailDrawer } from './DetailDrawer';
 import { FinalSql } from './FinalSql';
 import { SelectedColumns } from './SelectedColumns';
 import { RefreshCw } from 'lucide-react';
-import { SavedViewsMenu } from './SavedViewsMenu';
+import { SavedQueriesMenu } from './SavedQueriesMenu';
 
 const TOK_CLS: Record<Tok['k'], string> = { field: 'text-primary font-medium', op: 'text-muted-foreground', val: 'text-sev-medium', kw: 'text-foreground font-semibold', punct: 'text-sev-critical font-semibold' };
 
@@ -126,7 +126,7 @@ export function BuilderPage({ entity }: { entity: Entity }) {
               ))}
             </PopoverContent>
           </Popover>
-          <SavedViewsMenu entity={entity} />
+          <SavedQueriesMenu entity={entity} />
         </div>
       </div>
 

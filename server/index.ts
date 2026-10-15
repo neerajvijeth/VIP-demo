@@ -46,7 +46,7 @@ app.get('/api/health', async (_req, res) => {
 app.get('/api/env', (_req, res) => res.json({ env: config.env, exportMaxRows: config.exportMaxRows, catalog: config.catalog, schema: config.schema, semantics: semantics() }));
 
 // Make sure the discovered schema is loaded before any data route builds SQL (lazy, cached, backs off on failure).
-app.use(['/api/meta', '/api/query', '/api/overview'], (req, _res, next) => {
+app.use(['/api/meta', '/api/query', '/api/overview', '/api/saved', '/api/canvas'], (req, _res, next) => {
   ensureFreshSchema(30 * 60_000, userToken(req)).then(() => next(), () => next());
 });
 

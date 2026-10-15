@@ -43,6 +43,25 @@ run('canvas charts (live warehouse)', () => {
     expect(tbl.columns.map((c) => c.name)).toContain('hostname');
   }, 240_000);
 
+  it('Assets-page (builder) queries chart too: parameterised filter, total equals the page row count', async () => {
+    const { resolve } = await import('./savedResolve');
+    const { buildCount } = await import('./sqlBuilder');
+    const { syncSchema } = await import('./schema');
+    await syncSchema();
+    const payload = { tree: { type: 'group', op: 'AND', not: false, children: [{ type: 'condition', field: 'asset_class', operator: 'is', value: 'Server', not: false }] }, columns: ['hostname', 'region', 'asset_class'], sort: null, options: { latestSnapshotOnly: true, validOnly: true }, mode: 'rows' };
+    const r = resolve({ kind: 'builder', entity: 'assets', payload: payload as any });
+    expect(Object.keys(r.params).length).toBeGreaterThan(0);
+    const page = buildCount({ entity: 'assets', tree: payload.tree as any, options: payload.options });
+    const expected = Number((await query(page.sql, page.params))[0].total);
+    const d = await C.chartData(r, { type: 'donut', dimension: 'region', measure: { agg: 'count' } });
+    expect(d.total).toBe(expected);
+    expect(d.columns.map((c) => c.name)).toEqual(['hostname', 'region', 'asset_class']);
+    // summary-mode queries expose human labels as columns
+    const sum = resolve({ kind: 'builder', entity: 'assets', payload: { ...payload, mode: 'summary', summary: { groupBy: [{ field: 'business_unit' }], metrics: [{ fn: 'count_distinct', field: 'gold_asset_id' }], sort: null, limit: 50 } } as any });
+    const s = await C.chartData(sum, { type: 'bar', dimension: 'Business Unit', measure: { agg: 'sum', column: (await C.columnsOf(sum)).find((c) => C.isNumeric(c.type))!.name } });
+    expect(s.total).toBe(expected); // each asset has one business unit, so the per-BU distinct counts add up to the filtered asset count
+  }, 240_000);
+
   it('rejects unknown / malicious columns and non-numeric sums before any SQL runs', async () => {
     await expect(C.chartData(SQL, { type: 'bar', dimension: 'region` ; DROP TABLE x --', measure: { agg: 'count' } })).rejects.toThrow(/Unknown dimension/);
     await expect(C.chartData(SQL, { type: 'bar', dimension: 'region', measure: { agg: 'sum', column: 'hostname' } })).rejects.toThrow(/numeric/);

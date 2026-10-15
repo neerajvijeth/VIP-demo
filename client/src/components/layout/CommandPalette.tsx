@@ -3,8 +3,8 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useNavigate } from 'react-router-dom';
 import { Bookmark, BookmarkCheck, LayoutGrid, LayoutDashboard, MessageSquare, Moon, Server, ShieldAlert, Terminal, Wand2 } from 'lucide-react';
 import { useUi } from '@/store/ui';
-import { useSaved } from '@/store/saved';
-import { builderStore } from '@/store/builder';
+import { useSavedSql, kindLabel } from '@/lib/savedQueries';
+import { openSavedQuery } from '@/lib/openSaved';
 import { ENTITY } from '@/lib/entities';
 import { getPresets, encodeHash } from '@/lib/tree';
 import { useOpenBuilder } from '@/lib/hooks';
@@ -16,7 +16,7 @@ export function CommandPalette() {
   const { paletteOpen, setPalette, toggleTheme } = useUi();
   const navigate = useNavigate();
   const open = useOpenBuilder();
-  const { views } = useSaved();
+  const saved = useSavedSql();
   const go = (fn: () => void) => () => {
     setPalette(false);
     fn();
@@ -48,19 +48,11 @@ export function CommandPalette() {
                   </Command.Item>
                 ))}
               </Command.Group>
-              {views.length > 0 && (
-                <Command.Group heading="Saved views">
-                  {views.map((v) => (
-                    <Command.Item
-                      key={v.id}
-                      value={`saved ${v.name} ${v.entity}`}
-                      className={itemCls}
-                      onSelect={go(() => {
-                        builderStore(v.entity).getState().loadView(v);
-                        navigate(ENTITY[v.entity].path + encodeHash(v.tree, v.options, v.mode === 'summary' ? v.summary : null));
-                      })}
-                    >
-                      <Bookmark size={15} /> {v.name} <span className="ml-auto text-[11px] text-muted-foreground">{ENTITY[v.entity].label}</span>
+              {(saved.data?.length ?? 0) > 0 && (
+                <Command.Group heading="Saved queries">
+                  {saved.data!.map((q) => (
+                    <Command.Item key={q.id} value={`saved ${q.name} ${kindLabel(q)}`} className={itemCls} onSelect={go(() => openSavedQuery(q, navigate))}>
+                      <Bookmark size={15} /> {q.name} <span className="ml-auto text-[11px] text-muted-foreground">{kindLabel(q)}</span>
                     </Command.Item>
                   ))}
                 </Command.Group>

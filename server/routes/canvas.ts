@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import * as C from '../canvas';
 import { BuilderError } from '../sqlBuilder';
 import { getVersion, userOf } from '../savedQueries';
+import { resolve } from '../savedResolve';
 import { userToken } from '../auth';
 
 export const canvasRouter = Router();
@@ -17,7 +18,7 @@ canvasRouter.post('/', h(async (req, res) => res.status(201).json(await C.create
 canvasRouter.get('/columns/:queryId', h(async (req, res) => {
   const version = req.query.version && req.query.version !== 'latest' ? Number(req.query.version) : undefined;
   const q = getVersion(String(req.params.queryId), u(req), version);
-  const columns = await C.columnsOf(q.sql, userToken(req), abortable(res));
+  const columns = await C.columnsOf(resolve(q), userToken(req), abortable(res));
   res.json({ query: { id: q.id, name: q.name, version: q.version }, columns: columns.map((c) => ({ ...c, numeric: C.isNumeric(c.type) })) });
 }));
 

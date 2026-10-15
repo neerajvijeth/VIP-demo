@@ -1,13 +1,10 @@
-import { NavLink, useNavigate } from 'react-router-dom';
-import { Bookmark, BookmarkCheck, ChevronsLeft, ChevronsRight, LayoutDashboard, LayoutGrid, Server, ShieldAlert, Terminal, Trash2 } from 'lucide-react';
+import { NavLink } from 'react-router-dom';
+import { BookmarkCheck, ChevronsLeft, ChevronsRight, LayoutDashboard, LayoutGrid, Server, ShieldAlert, Terminal } from 'lucide-react';
 import type { Entity } from '@shared/types';
 import { cn, fmtCompact } from '@/lib/utils';
 import { useTotalCount } from '@/lib/hooks';
 import { useUi } from '@/store/ui';
-import { useSaved } from '@/store/saved';
-import { builderStore } from '@/store/builder';
 import { ENTITY } from '@/lib/entities';
-import { encodeHash } from '@/lib/tree';
 import { Sheet } from '@/components/ui/overlay';
 import { Skeleton } from '@/components/ui/primitives';
 
@@ -27,8 +24,6 @@ function SidebarBody({ collapsed, onNavigate }: { collapsed: boolean; onNavigate
     { to: '/dashboard/saved', label: 'Saved queries', icon: BookmarkCheck, entity: null as Entity | null },
     { to: '/dashboard/canvas', label: 'Canvas', icon: LayoutGrid, entity: null as Entity | null },
   ];
-  const { views, remove } = useSaved();
-  const navigate = useNavigate();
 
   return (
     <div className="flex h-full flex-col gap-1 overflow-y-auto p-2">
@@ -48,41 +43,6 @@ function SidebarBody({ collapsed, onNavigate }: { collapsed: boolean; onNavigate
         </NavLink>
       ))}
 
-      {!collapsed && (
-        <div className="mt-4">
-          <div className="eyebrow flex items-center gap-2 px-2.5 pb-1">
-            <Bookmark size={12} /> Saved views
-          </div>
-          {views.length === 0 && <p className="px-2.5 py-1 text-xs text-muted-foreground/80">Save a query from the Assets or Vulnerabilities page.</p>}
-          {(['assets', 'vulnerabilities'] as Entity[]).map((e) => {
-            const list = views.filter((v) => v.entity === e);
-            if (!list.length) return null;
-            return (
-              <div key={e} className="mt-2">
-                <div className="px-2.5 pb-0.5 text-[11px] text-muted-foreground/80">{ENTITY[e].label}</div>
-                {list.map((v) => (
-                  <div key={v.id} className="group flex items-center rounded-md hover:bg-muted">
-                    <button
-                      className="flex-1 truncate px-2.5 py-1.5 text-left text-sm text-muted-foreground group-hover:text-foreground"
-                      onClick={() => {
-                        builderStore(e).getState().loadView(v);
-                        navigate(ENTITY[e].path + encodeHash(v.tree, v.options, v.mode === 'summary' ? v.summary : null));
-                        onNavigate?.();
-                      }}
-                      title={v.name}
-                    >
-                      {v.name}
-                    </button>
-                    <button className="mr-1 hidden rounded p-1 text-muted-foreground hover:text-sev-critical group-hover:block" aria-label={`Delete saved view ${v.name}`} onClick={() => remove(v.id)}>
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }

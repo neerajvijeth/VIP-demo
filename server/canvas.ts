@@ -5,6 +5,7 @@ import { BuilderError } from './sqlBuilder';
 import { HttpError, getVersion } from './savedQueries';
 import { query } from './db';
 import { cached, scopeOf } from './cache';
+import { inlineParams, resolve, type Resolved } from './savedResolve';
 
 /**
  * Canvas = named dashboards of tiles. A tile = one saved query (latest or a pinned version) + one chart configuration.
@@ -96,9 +97,10 @@ export const isNumeric = (t: string) => NUMERIC.test(t);
 /** Wrap the saved SQL as a sub-select; the newline protects against a trailing -- comment swallowing the bracket. */
 const sub = (sql: string) => `(${sql}\n) q`;
 
-export async function columnsOf(sql: string, token?: string, signal?: AbortSignal): Promise<Col[]> {
-  return cached(`canvas-cols|${scopeOf(token)}|${sql}`, async () => {
-    const rows = await query(`DESCRIBE QUERY ${sql}`, {}, { userToken: token, signal });
+export async function columnsOf(r: Resolved, token?: string, signal?: AbortSignal): Promise<Col[]> {
+  return cached(`canvas-cols|${scopeOf(token)}|${r.sql}|${JSON.stringify(r.params)}`, async () => {
+    // DESCRIBE cannot take parameter markers: describe the same statement with the (escaped) values inlined
+    const rows = await query(`DESCRIBE QUERY ${inlineParams(r.sql, r.params)}`, {}, { userToken: token, signal });
     const out: Col[] = [];
     for (const r of rows) {
       const name = String(r.col_name ?? '');
@@ -132,9 +134,11 @@ function dimSql(name: string | undefined, cols: Col[], what: string): string {
 export interface ChartData { columns: Col[]; rows: Array<{ label: string; label2?: string; value: number | null; [k: string]: unknown }>; sql: string; total: number; capped: boolean; elapsedMs: number; grouped: boolean }
 const ROW_CAP = 1000;
 
-export async function chartData(sql: string, chartIn: unknown, token?: string, signal?: AbortSignal): Promise<ChartData> {
+export async function chartData(src: Resolved | string, chartIn: unknown, token?: string, signal?: AbortSignal): Promise<ChartData> {
   const chart = cleanChart(chartIn);
-  const cols = await columnsOf(sql, token, signal);
+  const r0: Resolved = typeof src === 'string' ? { sql: src, params: {} } : src;
+  const sql = r0.sql;
+  const cols = await columnsOf(r0, token, signal);
   const t0 = Date.now();
   let stmt: string;
   if (chart.type === 'table') {
@@ -149,8 +153,8 @@ export async function chartData(sql: string, chartIn: unknown, token?: string, s
     const order = sortable || chart.sort === 'label_asc' ? 'label ASC' : chart.sort === 'label_desc' ? 'label DESC' : chart.sort === 'value_asc' ? 'value ASC NULLS LAST' : 'value DESC NULLS LAST';
     stmt = `SELECT ${d1} AS label${d2 ? `, ${d2} AS label2` : ''}, ${measureSql(chart.measure, cols)} AS value FROM ${sub(sql)} GROUP BY ${d2 ? '1, 2' : '1'} ORDER BY ${order}${d2 ? ', label2 ASC' : ''} LIMIT ${ROW_CAP}`;
   }
-  const key = `canvas-data|${scopeOf(token)}|${stmt}`;
-  const rows = await cached(key, () => query(stmt, {}, { userToken: token, signal }), { ttlMs: 5 * 60_000 });
+  const key = `canvas-data|${scopeOf(token)}|${stmt}|${JSON.stringify(r0.params)}`;
+  const rows = await cached(key, () => query(stmt, r0.params, { userToken: token, signal }), { ttlMs: 5 * 60_000 });
   const elapsedMs = Date.now() - t0;
   if (chart.type === 'table') return { columns: cols, rows: rows as any, sql: stmt, total: rows.length, capped: rows.length >= ROW_CAP, elapsedMs, grouped: false };
   let out = rows.map((r) => ({ ...r, label: String(r.label ?? 'Unknown'), label2: r.label2 === undefined ? undefined : String(r.label2), value: r.value === null || r.value === undefined ? null : Number(r.value) }));
@@ -171,7 +175,7 @@ export async function runTile(tile: { query_id: string; query_version: 'latest' 
   try { q = getVersion(tile.query_id, user, tile.query_version === 'latest' ? undefined : tile.query_version); }
   catch (e) { return { state: 'no_access' as const, message: (e as Error).message === 'Saved query not found' ? 'This tile uses a saved query that was deleted or is not shared with you.' : (e as Error).message }; }
   try {
-    const data = await chartData(q.sql, tile.chart, token, signal);
+    const data = await chartData(resolve(q), tile.chart, token, signal);
     return { state: 'ok' as const, query: { id: q.id, name: q.name, version: q.version }, ...data };
   } catch (e) {
     if (e instanceof BuilderError) return { state: 'error' as const, message: e.message, query: { id: q.id, name: q.name, version: q.version } };

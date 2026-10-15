@@ -7,7 +7,7 @@ import { Button, ErrorPanel, Input, NativeSelect, Skeleton } from '@/components/
 import { Sheet } from '@/components/ui/overlay';
 import { ApiError } from '@/lib/api';
 import { CHART_TYPES, CanvasApi, type Agg, type Chart, type ChartType, type Col, type Tile } from '@/lib/canvas';
-import { SavedApi, useSavedSql } from '@/lib/savedQueries';
+import { SavedApi, kindLabel, useSavedSql } from '@/lib/savedQueries';
 import { useDebounced, uid } from '@/lib/utils';
 
 const AGGS: Array<{ value: Agg; label: string; needs: 'none' | 'any' | 'num' }> = [
@@ -84,9 +84,9 @@ export function TileBuilder({ open, onClose, initial, presetQueryId, onSave }: {
             <div className="relative mb-1"><Search size={13} className="absolute left-2.5 top-2.5 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…" className="h-8 pl-8" aria-label="Search saved queries" /></div>
             <ul className="max-h-44 overflow-auto rounded-md border border-border" role="listbox" aria-label="Saved queries">
               {queries.isLoading && <li className="p-2 text-muted-foreground">Loading…</li>}
-              {!queries.isLoading && list.length === 0 && <li className="p-2 text-muted-foreground">{(queries.data?.length ?? 0) === 0 ? 'No saved queries yet. Save one from the Custom SQL page first.' : 'No match.'}</li>}
+              {!queries.isLoading && list.length === 0 && <li className="p-2 text-muted-foreground">{(queries.data?.length ?? 0) === 0 ? 'No saved queries yet. Save one from the Assets, Vulnerabilities or Custom SQL page first.' : 'No match.'}</li>}
               {list.map((q) => (
-                <li key={q.id}><button role="option" aria-selected={q.id === queryId} onClick={() => { setQueryId(q.id); setVersion('latest'); setChart((c) => ({ ...c, dimension: undefined, split: undefined, measure: { agg: 'count' } })); setTitleTouched(false); setTitle(q.name); }} className={`flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left text-[13px] hover:bg-muted ${q.id === queryId ? 'bg-accent' : ''}`}><span className="truncate">{q.name}</span><Badge>v{q.version}</Badge></button></li>
+                <li key={q.id}><button role="option" aria-selected={q.id === queryId} onClick={() => { setQueryId(q.id); setVersion('latest'); setChart((c) => ({ ...c, dimension: undefined, split: undefined, measure: { agg: 'count' } })); setTitleTouched(false); setTitle(q.name); }} className={`flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left text-[13px] hover:bg-muted ${q.id === queryId ? 'bg-accent' : ''}`}><span className="truncate">{q.name}</span><span className="flex shrink-0 gap-1"><Badge>{kindLabel(q)}</Badge><Badge>v{q.version}</Badge></span></button></li>
               ))}
             </ul>
             {chosen && (

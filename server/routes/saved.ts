@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import * as S from '../savedQueries';
+import { inlineParams, resolve } from '../savedResolve';
 
 export const savedRouter = Router();
 const h = (fn: (req: Request, res: Response) => Promise<unknown> | unknown) => (req: Request, res: Response, next: (e?: unknown) => void) => Promise.resolve(fn(req, res)).catch(next);
@@ -9,7 +10,9 @@ const id = (req: Request) => String(req.params.id);
 savedRouter.get('/me', (req, res) => res.json({ user: u(req) }));
 savedRouter.get('/', (req, res) => res.json({ queries: S.list(u(req)) }));
 savedRouter.post('/', h(async (req, res) => res.status(201).json(await S.create(req.body, u(req)))));
-savedRouter.get('/:id', h((req, res) => res.json(S.get(id(req), u(req)).current)));
+savedRouter.get('/:id', h((req, res) => res.json(S.getVersion(id(req), u(req)))));
+/** The statement a saved query runs (builder queries: regenerated from the typed spec), with values inlined for reading. */
+savedRouter.get('/:id/sql', h((req, res) => { const r = resolve(S.getVersion(id(req), u(req))); res.json({ sql: r.sql, params: r.params, inline: inlineParams(r.sql, r.params) }); }));
 savedRouter.put('/:id', h(async (req, res) => res.json(await S.update(id(req), req.body, u(req)))));
 savedRouter.delete('/:id', h(async (req, res) => { await S.remove(id(req), u(req)); res.json({ ok: true }); }));
 savedRouter.post('/:id/duplicate', h(async (req, res) => res.status(201).json(await S.duplicate(id(req), u(req)))));

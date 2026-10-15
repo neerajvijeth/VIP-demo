@@ -4,11 +4,18 @@ import { useQueryClient } from '@tanstack/react-query';
 import { BarChart3, Copy, FolderOpen, Pencil, Search, Trash2, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badges';
 import { Button, Card, ErrorPanel, Input, Skeleton } from '@/components/ui/primitives';
-import { SavedApi, useMe, useSavedSql, type SavedSql } from '@/lib/savedQueries';
-import { useCustomSql } from '@/store/customSql';
+import { SavedApi, kindLabel, useMe, useSavedSql, type SavedSql } from '@/lib/savedQueries';
+import { openSavedQuery } from '@/lib/openSaved';
+import { useQuery } from '@tanstack/react-query';
 import { toast } from '@/store/toast';
 
 type Scope = 'all' | 'mine' | 'shared';
+
+/** The statement the query runs (builder queries: generated from the saved filters). */
+function SqlPreview({ q }: { q: SavedSql }) {
+  const r = useQuery({ queryKey: ['saved-sql-text', q.id, q.version], queryFn: () => SavedApi.sqlOf(q.id), retry: false, staleTime: 60_000 });
+  return <pre className="mono max-h-56 overflow-auto whitespace-pre-wrap break-words text-[12px] leading-relaxed">{r.isLoading ? 'Loading…' : r.isError ? `This query can no longer generate SQL: ${(r.error as Error).message}` : r.data!.inline}</pre>;
+}
 
 export default function SavedQueriesPage() {
   const navigate = useNavigate();
@@ -23,26 +30,26 @@ export default function SavedQueriesPage() {
     if (scope === 'mine' && q.owner !== me.data) return false;
     if (scope === 'shared' && q.owner === me.data) return false;
     const t = search.trim().toLowerCase();
-    return !t || `${q.name} ${q.description} ${q.sql}`.toLowerCase().includes(t);
+    return !t || `${q.name} ${q.description} ${q.sql} ${kindLabel(q)}`.toLowerCase().includes(t);
   }), [list.data, search, scope, me.data]);
 
   const run = async (fn: () => Promise<unknown>, ok: string) => {
     try { await fn(); await qc.invalidateQueries({ queryKey: ['saved-sql'] }); toast.success(ok); } catch (e: any) { toast.error('Failed', e?.message); }
   };
-  const openIt = (q: SavedSql) => { useCustomSql.getState().setSql(q.sql); navigate(`/dashboard/sql?q=${q.id}`); };
+  const openIt = (q: SavedSql) => openSavedQuery(q, navigate);
   const tab = (s: Scope, label: string) => <button onClick={() => setScope(s)} className={`rounded-[5px] px-3 py-1 text-xs font-medium ${scope === s ? 'bg-card text-foreground shadow-[0_0_0_1px_hsl(var(--border))]' : 'text-muted-foreground hover:text-foreground'}`} aria-pressed={scope === s}>{label}</button>;
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-4 p-4 sm:p-6">
       <div>
         <h1 className="font-display text-[34px] leading-none">Saved queries</h1>
-        <p className="mt-2 text-xs text-muted-foreground">Your Custom SQL queries and the ones your team shared. Open one to edit it, or build charts from it on Canvas.</p>
+        <p className="mt-2 text-xs text-muted-foreground">Everything you saved from Assets, Vulnerabilities and Custom SQL, plus what your team shared. Open one to edit it, or build charts from it on Canvas.</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative w-full max-w-sm"><Search size={14} className="absolute left-3 top-2.5 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, description or SQL…" aria-label="Search saved queries" className="pl-9" /></div>
         <div className="inline-flex rounded-md bg-muted p-0.5" role="group" aria-label="Filter">{tab('all', 'All')}{tab('mine', 'Mine')}{tab('shared', 'Shared with me')}</div>
-        <Button className="ml-auto" variant="primary" onClick={() => { useCustomSql.getState().setSql(''); navigate('/dashboard/sql'); }}>New query</Button>
+        <Button className="ml-auto" variant="primary" onClick={() => navigate('/dashboard/sql')}>New query</Button>
       </div>
 
       {list.isError && <ErrorPanel message={(list.error as Error).message} onRetry={() => void list.refetch()} />}
@@ -54,7 +61,7 @@ export default function SavedQueriesPage() {
       ) : (
         <Card className="overflow-hidden p-0">
           <table className="w-full text-sm">
-            <thead><tr className="border-b border-border text-left text-xs text-muted-foreground"><th className="px-4 py-2.5 font-medium">Name</th><th className="hidden px-3 py-2.5 font-medium md:table-cell">Description</th><th className="px-3 py-2.5 font-medium">Sharing</th><th className="px-3 py-2.5 font-medium">Version</th><th className="hidden px-3 py-2.5 font-medium lg:table-cell">Owner</th><th className="hidden px-3 py-2.5 font-medium lg:table-cell">Updated</th><th className="px-3 py-2.5 text-right font-medium">Actions</th></tr></thead>
+            <thead><tr className="border-b border-border text-left text-xs text-muted-foreground"><th className="px-4 py-2.5 font-medium">Name</th><th className="px-3 py-2.5 font-medium">Type</th><th className="hidden px-3 py-2.5 font-medium md:table-cell">Description</th><th className="px-3 py-2.5 font-medium">Sharing</th><th className="px-3 py-2.5 font-medium">Version</th><th className="hidden px-3 py-2.5 font-medium lg:table-cell">Owner</th><th className="hidden px-3 py-2.5 font-medium lg:table-cell">Updated</th><th className="px-3 py-2.5 text-right font-medium">Actions</th></tr></thead>
             <tbody>
               {rows.map((q) => {
                 const mine = q.owner === me.data;
@@ -62,6 +69,7 @@ export default function SavedQueriesPage() {
                   <Fragment key={q.id}>
                     <tr className="border-b border-border/60 hover:bg-muted/40">
                       <td className="px-4 py-2.5"><button className="text-left font-medium hover:underline" onClick={() => setOpen(open === q.id ? null : q.id)} aria-expanded={open === q.id} title="Show the SQL">{q.name}</button></td>
+                      <td className="px-3 py-2.5"><Badge tone={q.kind === 'builder' ? 'primary' : 'neutral'}>{kindLabel(q)}</Badge></td>
                       <td className="hidden max-w-[22rem] truncate px-3 py-2.5 text-muted-foreground md:table-cell" title={q.description}>{q.description || '–'}</td>
                       <td className="px-3 py-2.5">{q.visibility === 'team' ? <Badge tone="primary">Team</Badge> : <Badge>Private</Badge>}</td>
                       <td className="num px-3 py-2.5">v{q.version}</td>
@@ -80,7 +88,7 @@ export default function SavedQueriesPage() {
                         </div>
                       </td>
                     </tr>
-                    {open === q.id && <tr className="border-b border-border/60 bg-muted/30"><td colSpan={7} className="px-4 py-3"><pre className="mono max-h-56 overflow-auto whitespace-pre-wrap break-words text-[12px] leading-relaxed">{q.sql}</pre></td></tr>}
+                    {open === q.id && <tr className="border-b border-border/60 bg-muted/30"><td colSpan={8} className="px-4 py-3"><SqlPreview q={q} /></td></tr>}
                   </Fragment>
                 );
               })}

@@ -5,6 +5,7 @@ import { Sidebar } from './Sidebar';
 import { CommandPalette } from './CommandPalette';
 import { Toaster } from '@/components/ui/toaster';
 import { useUi } from '@/store/ui';
+import { useMigrateLocalViews } from '@/lib/migrateViews';
 
 const isTyping = (t: EventTarget | null) => {
   const el = t as HTMLElement | null;
@@ -51,6 +52,7 @@ export function AppShell() {
   const dirRef = useRef<'right' | 'left' | null>(null);
   const setLast = useUi((s) => s.setLastDashboardPath);
   useGlobalShortcuts();
+  useMigrateLocalViews();
 
   if (prev.current !== mode) {
     dirRef.current = mode === 'chat' ? 'right' : 'left';
