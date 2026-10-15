@@ -4,7 +4,7 @@ import { EMPTY_FILTERS } from '../../shared/types';
 import { filtersToTree } from '../../shared/filters';
 import { WIDGETS, WIDGET_BY_ID, makeCtx, requiredColumns } from '../overviewWidgets';
 import { buildWhere, BuilderError } from '../sqlBuilder';
-import { entityTable } from '../config';
+import { canonicalSource } from '../overviewSource';
 import { createLimiter, query } from '../db';
 import { userToken } from '../auth';
 import { cached, scopeOf } from '../cache';
@@ -60,7 +60,7 @@ overviewRouter.post('/widgets', async (req, res, next) => {
           try {
             const { tree, ignored } = pruneTree(def.entity, full);
             const { where, params } = buildWhere(def.entity, tree, opts);
-            const sql = def.sql(makeCtx(entityTable(def.entity), where));
+            const sql = def.sql(makeCtx(canonicalSource(def.entity), where));
             const run = () => query(sql, params, { userToken: token, signal: ac.signal });
             const rows = await cached(`w|${scope}|${sql}|${JSON.stringify(params)}`, run, { fresh: !!fresh });
             return [def.id, { rows, elapsedMs: Date.now() - t, ...(ignored.length ? { ignoredFilters: [...new Set(ignored)] } : {}) }] as const;

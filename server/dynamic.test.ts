@@ -1,11 +1,12 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { DEFAULT_SEMANTICS, L, logicalOf, setSemantics } from '../shared/semantics';
 import { loadSemantics } from './semantics';
-import { WIDGETS, makeCtx, requiredColumns } from './overviewWidgets';
 import { buildWhere, buildDetail, buildRun } from './sqlBuilder';
 import { applyLiveSchema, fieldTypeFor, getField, isSelectableColumn, scopeAvailability, setLiveColumns } from './fieldCatalog';
 import { cached, cacheStats, clearCache } from './cache';
 import { KNOWN_COLUMNS } from './knownColumns';
+import { WIDGETS, makeCtx, requiredColumns } from './overviewWidgets';
+import { canonicalSource } from './overviewSource';
 
 const grp = (children: any[] = []) => ({ type: 'group', op: 'AND', not: false, children }) as any;
 const reset = () => setSemantics({});
@@ -35,22 +36,70 @@ describe('semantics loading', () => {
 describe('widgets follow the mapping and values', () => {
   afterEach(reset);
   const sql = (id: string, where = 'WHERE TRUE') => WIDGETS.find((w) => w.id === id)!.sql(makeCtx('`c`.`s`.`t`', where));
-  it('default SQL is unchanged', () => {
-    expect(sql('kpiKev')).toContain('`kev_flag` = true');
-    expect(sql('kpiOpenVulns')).toContain("NOT IN ('FIXED')");
+  it('default SQL: canonical open state, KEV, severities', () => {
+    expect(sql('kpiKev')).toContain('COALESCE(`kev_flag`, false) = true');
+    expect(sql('kpiOpenVulns')).toContain("NOT IN ('FIXED', 'RESOLVED', 'CLOSED')");
+    expect(sql('kpiOpenVulns')).toContain('UPPER(COALESCE(`te_state`, `df_status`))');
     expect(sql('kpiCritHigh')).toContain("`severity` IN ('Critical', 'High')");
   });
   it('uses mapped columns and configured values', () => {
-    setSemantics({ columns: { kev_flag: 'is_kev', finding_id: 'fid' }, values: { closedStates: ['Closed', "Won't fix"], highSeverities: ['Sev1'] } });
-    expect(sql('kpiKev')).toContain('`is_kev` = true');
-    expect(sql('kpiKev')).toContain('COUNT(DISTINCT `fid`)');
-    expect(sql('kpiOpenVulns')).toContain("NOT IN ('CLOSED', 'WON''T FIX')");
+    setSemantics({ columns: { kev_flag: 'is_kev' }, values: { closedStates: ['Closed', "Won't fix"], highSeverities: ['Sev1'] } });
+    expect(sql('kpiKev')).toContain('COALESCE(`is_kev`, false) = true');
+    expect(sql('kpiOpenVulns')).toContain("'WON''T FIX'");
+    expect(sql('kpiOpenVulns')).toContain("'RESOLVED'");
     expect(sql('kpiCritHigh')).toContain("`severity` IN ('Sev1')");
   });
+  it('findings are counted as rows of the de-duplicated source (not COUNT DISTINCT of an id that may be empty)', () => {
+    for (const id of ['kpiOpenVulns', 'kpiCritHigh', 'kpiKev', 'kpiSla', 'severityDonut', 'slaStatus', 'ageBuckets', 'riskByBusinessUnit']) {
+      expect(sql(id), id).not.toContain('finding_id');
+      expect(sql(id), id).toContain('COUNT');
+    }
+    expect(sql('kpiOpenVulns')).toContain('COUNT(*)');
+  });
+  it('every distribution has an Unknown bucket so it adds up to its total', () => {
+    for (const id of ['severityDonut', 'slaStatus', 'ageBuckets', 'riskByBusinessUnit', 'assetsByClass', 'toolVisibility', 'assetsByCriticality']) expect(sql(id), id).toContain('Unknown');
+  });
+  it('defaulted or missing criticality is never shown as Low', () => {
+    expect(sql('assetsByCriticality')).toContain("'Unknown (defaulted)'");
+    expect(sql('assetsByCriticality')).toContain("LIKE '%default%'");
+  });
+  it('vulnerabilities are keyed by CVE, else plugin CVE, else plugin id, and named by name else title', () => {
+    expect(sql('topVulns')).toContain('COALESCE(`cve`, `plugin_cve`, CAST(`plugin_id` AS STRING))');
+    expect(sql('topVulns')).toContain('COALESCE(`vulnerability_name`, `title`)');
+    expect(sql('topVulns')).toContain('MAX_BY(`severity`');
+  });
   it('reports the physical columns each widget needs', () => {
-    expect(requiredColumns(WIDGETS.find((w) => w.id === 'kpiKev')!).sort()).toEqual(['finding_id', 'kev_flag', 'severity'.replace('severity', 'te_state')].sort());
+    expect(requiredColumns(WIDGETS.find((w) => w.id === 'kpiKev')!).sort()).toEqual(['df_status', 'kev_flag', 'te_state']);
     setSemantics({ columns: { kev_flag: 'is_kev' } });
     expect(requiredColumns(WIDGETS.find((w) => w.id === 'kpiKev')!)).toContain('is_kev');
+  });
+});
+
+describe('overview source (what the cards count)', () => {
+  afterEach(() => { reset(); setLiveColumns('assets', KNOWN_COLUMNS.assets); setLiveColumns('vulnerabilities', KNOWN_COLUMNS.vulnerabilities); });
+  it('assets: one row per asset per snapshot, newest run, not purged, not terminated', () => {
+    const s = canonicalSource('assets');
+    expect(s).toContain('ROW_NUMBER() OVER (PARTITION BY x.`gold_asset_id`, x.`snapshot_date`');
+    expect(s).toContain('COALESCE(x.`is_purged`, false) = false');
+    expect(s).toContain('x.`terminated_at` IS NULL');
+    expect(s).toContain('MAX(`snapshot_timestamp`)');
+    expect(s).toContain('canonical_source_rank');
+  });
+  it('findings: de-duplicated, only on included assets, asset attributes come from the asset row', () => {
+    const s = canonicalSource('vulnerabilities');
+    expect(s).toContain("COALESCE(f.`deduplication_status`, 'Unique') <> 'Duplicate'");
+    expect(s).toMatch(/JOIN \(SELECT \* EXCEPT \(_rn\)/);
+    expect(s).toMatch(/f\.\* EXCEPT \([^)]*`business_unit`[^)]*\)/);
+    expect(s).toContain('a.`business_unit`');
+    expect(s).toContain('a.`snapshot_date` = f.`snapshot_date`');
+  });
+  it('degrades when columns are missing (no dedupe column, no purge flag, no run timestamp)', () => {
+    setLiveColumns('vulnerabilities', KNOWN_COLUMNS.vulnerabilities.filter((c) => c !== 'deduplication_status' && c !== 'snapshot_timestamp'));
+    setLiveColumns('assets', KNOWN_COLUMNS.assets.filter((c) => c !== 'is_purged' && c !== 'snapshot_timestamp'));
+    const f = canonicalSource('vulnerabilities');
+    expect(f).not.toContain('deduplication_status');
+    expect(f).not.toContain('is_purged');
+    expect(f).not.toContain('_m._ts');
   });
 });
 

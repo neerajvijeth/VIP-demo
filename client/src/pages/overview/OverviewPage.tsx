@@ -19,7 +19,10 @@ import { critHighCond, lcond, openCond } from '@/lib/sem';
 import { semantics } from '@shared/semantics';
 import { fmtNum } from '@/lib/utils';
 
-const OPEN = openCond;
+/** Click-through filter for "open": same idea as the cards (open state, no duplicates). */
+const OPEN = (): Condition[] => [openCond(), lcond('deduplication_status', 'is not', 'Duplicate')];
+/** A chart's Unknown bucket (NULL / empty) is everything that is not one of the known labels. */
+const eqOrUnknown = (field: string, label: string, known: string[]) => (label.startsWith('Unknown') ? lcond(field, 'is none of', known) : lcond(field, 'is', label));
 const CRIT_HIGH = critHighCond;
 const BUCKETS: Record<string, [number, number | null]> = { '1-30': [1, 30], '31-60': [31, 60], '61-90': [61, 90], '90+': [91, null], '0-30': [0, 30], '91-180': [91, 180], '180+': [181, null] };
 
@@ -68,23 +71,24 @@ function PageBody() {
               <div className="mb-1 text-xs font-medium text-muted-foreground">Agent &amp; staleness</div>
               <Meter label="Tenable agent installed" value={num(c.with_agent)} total={total} color="hsl(var(--ok))" onClick={() => drill('assets', lcond('te_has_agent', 'is true'))} />
               <Meter label="No Tenable agent" value={num(c.without_agent)} total={total} color="hsl(var(--sev-high))" onClick={() => drill('assets', lcond('te_has_agent', 'is false'))} />
+              <Meter label="Agent status unknown" value={num(c.unknown_agent)} total={total} color="hsl(var(--muted-foreground) / 0.5)" onClick={() => drill('assets', lcond('te_has_agent', 'is empty'))} />
               <Meter label="Stale assets" value={num(c.stale)} total={total} color="hsl(var(--sev-critical))" onClick={() => drill('assets', lcond('asset_aging_status', 'is', semantics().values.staleStatus))} />
               <Meter label="Aging assets" value={num(c.aging)} total={total} color="hsl(var(--sev-medium))" onClick={() => drill('assets', lcond('asset_aging_status', 'is', semantics().values.agingStatus))} />
             </div>
             <div>
               <div className="mb-2 text-xs font-medium text-muted-foreground">Tool visibility</div>
               <StackedBar
-                segments={ordered(vis, visOrder).concat(vis.filter((v) => !visOrder.includes(v.label))).map((v) => ({ ...v, color: v.label.startsWith('Full') ? 'hsl(var(--ok))' : v.label.startsWith('Partial') ? 'hsl(var(--sev-medium))' : v.label.startsWith('Single') ? 'hsl(var(--sev-high))' : 'hsl(var(--sev-critical))' }))}
-                onSelect={(l) => drill('assets', lcond('tool_visibility', 'is', l))}
+                segments={ordered(vis, visOrder).concat(vis.filter((v) => !visOrder.includes(v.label))).map((v) => ({ ...v, color: v.label.startsWith('Full') ? 'hsl(var(--ok))' : v.label.startsWith('Partial') ? 'hsl(var(--sev-medium))' : v.label.startsWith('Single') ? 'hsl(var(--sev-high))' : v.label.startsWith('None') ? 'hsl(var(--sev-critical))' : 'hsl(var(--muted-foreground) / 0.45)' }))}
+                onSelect={(l) => drill('assets', eqOrUnknown('tool_visibility', l, visOrder))}
               />
             </div>
             <div>
               <div className="mb-2 text-xs font-medium text-muted-foreground">OS support (assets with open findings)</div>
               <div className="grid grid-cols-2 gap-3">
-                <button className="rounded-md border border-border p-3 text-left hover:bg-muted" onClick={() => drill('vulnerabilities', OPEN(), lcond('df_end_of_support_status', 'is', semantics().values.eos))}>
+                <button className="rounded-md border border-border p-3 text-left hover:bg-muted" onClick={() => drill('vulnerabilities', ...OPEN(), lcond('df_end_of_support_status', 'is', semantics().values.eos))}>
                   <div className="num text-2xl font-semibold text-sev-critical">{fmtNum(num(e.eos))}</div><div className="text-xs text-muted-foreground">End of support</div>
                 </button>
-                <button className="rounded-md border border-border p-3 text-left hover:bg-muted" onClick={() => drill('vulnerabilities', OPEN(), lcond('df_end_of_support_status', 'is', semantics().values.upcomingEos))}>
+                <button className="rounded-md border border-border p-3 text-left hover:bg-muted" onClick={() => drill('vulnerabilities', ...OPEN(), lcond('df_end_of_support_status', 'is', semantics().values.upcomingEos))}>
                   <div className="num text-2xl font-semibold text-sev-high">{fmtNum(num(e.upcoming))}</div><div className="text-xs text-muted-foreground">Upcoming EOS</div>
                 </button>
               </div>
@@ -101,11 +105,11 @@ function PageBody() {
       <Section title="Headline numbers">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
           <KpiCard id="kpiTotalAssets" title="Total assets" pick={(r) => ({ value: num(r[0]?.value) })} series={s('unique_managed_assets')} goodWhen="neutral" onClick={() => drill('assets')} />
-          <KpiCard id="kpiOpenVulns" title="Open vulns" pick={(r) => ({ value: num(r[0]?.value) })} onClick={() => drill('vulnerabilities', OPEN())} />
-          <KpiCard id="kpiCritHigh" title="Critical + High" tone="critical" pick={(r) => ({ value: num(r[0]?.value) })} series={sumSeries(s('critical_risk_findings'), s('high_risk_findings'))} onClick={() => drill('vulnerabilities', OPEN(), CRIT_HIGH())} />
-          <KpiCard id="kpiKev" title="Known exploited (KEV)" tone="critical" pick={(r) => ({ value: num(r[0]?.value) })} series={s('known_exploited_vulnerabilities')} onClick={() => drill('vulnerabilities', OPEN(), lcond('kev_flag', 'is true'))} />
-          <KpiCard id="kpiSla" title="SLA breach rate" tone="high" pick={(r) => { const t = num(r[0]?.total), b = num(r[0]?.breached); return { value: t ? (b / t) * 100 : 0, pct: true, sub: `${fmtNum(b)} of ${fmtNum(t)} open breached` }; }} series={s('findings_past_sla')} onClick={() => drill('vulnerabilities', OPEN(), lcond('sla_breached', 'is true'))} />
-          <KpiCard id="kpiExposedCritHigh" title="Exposed, Crit/High" tone="high" pick={(r) => ({ value: num(r[0]?.value), sub: 'internet-facing, distinct assets' })} onClick={() => drill('vulnerabilities', OPEN(), CRIT_HIGH(), lcond('internet_exposed', 'is true'))} />
+          <KpiCard id="kpiOpenVulns" title="Open vulns" pick={(r) => ({ value: num(r[0]?.value), sub: 'open findings, de-duplicated' })} onClick={() => drill('vulnerabilities', ...OPEN())} />
+          <KpiCard id="kpiCritHigh" title="Critical + High" tone="critical" pick={(r) => ({ value: num(r[0]?.value), sub: 'by scanner severity' })} series={sumSeries(s('critical_risk_findings'), s('high_risk_findings'))} onClick={() => drill('vulnerabilities', ...OPEN(), CRIT_HIGH())} />
+          <KpiCard id="kpiKev" title="Known exploited (KEV)" tone="critical" pick={(r) => ({ value: num(r[0]?.value), sub: 'open findings' })} series={s('known_exploited_vulnerabilities')} onClick={() => drill('vulnerabilities', ...OPEN(), lcond('kev_flag', 'is true'))} />
+          <KpiCard id="kpiSla" title="SLA breach rate" tone="high" pick={(r) => { const t = num(r[0]?.total), b = num(r[0]?.breached); return { value: t ? (b / t) * 100 : 0, pct: true, sub: `${fmtNum(b)} of ${fmtNum(t)} open breached` }; }} series={s('findings_past_sla')} onClick={() => drill('vulnerabilities', ...OPEN(), lcond('sla_breached', 'is true'))} />
+          <KpiCard id="kpiExposedCritHigh" title="Exposed, Crit/High" tone="high" pick={(r) => ({ value: num(r[0]?.value), sub: 'internet-facing, distinct assets' })} onClick={() => drill('vulnerabilities', ...OPEN(), CRIT_HIGH(), lcond('internet_exposed', 'is true'))} />
         </div>
       </Section>
 
@@ -115,7 +119,7 @@ function PageBody() {
             {(r) => {
               const rows = r.severityDonut.map((x) => ({ name: String(x.label), value: num(x.value) }));
               const data = SEVERITY_ORDER.map((n) => rows.find((x) => x.name === n)).filter(Boolean) as typeof rows;
-              return <Donut data={data.concat(rows.filter((x) => !SEVERITY_ORDER.includes(x.name)))} onSelect={(n) => drill('vulnerabilities', OPEN(), lcond('severity', 'is', n))} />;
+              return <Donut data={data.concat(rows.filter((x) => !SEVERITY_ORDER.includes(x.name)))} onSelect={(n) => drill('vulnerabilities', ...OPEN(), eqOrUnknown('severity', n, SEVERITY_ORDER))} />;
             }}
           </WidgetCard>
           <WidgetCard ids={['slaStatus']} title="SLA status" subtitle="Open findings by SLA state">
@@ -123,7 +127,7 @@ function PageBody() {
               const order = ['Breached', 'Due Soon', 'Within SLA'];
               const rows = r.slaStatus.map((x) => ({ label: String(x.label), value: num(x.value) }));
               const all = ordered(rows, order).concat(rows.filter((x) => !order.includes(x.label)));
-              return <StackedBar segments={all.map((x, i) => ({ ...x, color: colorFor(x.label, i) }))} onSelect={(l) => drill('vulnerabilities', OPEN(), lcond('sla_status', 'is', l))} />;
+              return <StackedBar segments={all.map((x, i) => ({ ...x, color: colorFor(x.label, i) }))} onSelect={(l) => drill('vulnerabilities', ...OPEN(), eqOrUnknown('sla_status', l, order))} />;
             }}
           </WidgetCard>
           <WidgetCard ids={['overdueBuckets']} title="Overdue (days past SLA)" subtitle="Open findings past due">
@@ -131,15 +135,15 @@ function PageBody() {
               <BucketBars
                 color="hsl(var(--sev-critical))"
                 data={ordered(r.overdueBuckets.map((x) => ({ label: String(x.label), value: num(x.value) })), ['1-30', '31-60', '61-90', '90+'])}
-                onSelect={(l) => { const [lo, hi] = BUCKETS[l]; drill('vulnerabilities', OPEN(), hi === null ? lcond('overdue_days', '≥', lo) : lcond('overdue_days', 'between', [lo, hi])); }}
+                onSelect={(l) => { const [lo, hi] = BUCKETS[l] ?? [0, 0]; drill('vulnerabilities', ...OPEN(), hi === null ? lcond('overdue_days', '≥', lo) : lcond('overdue_days', 'between', [lo, hi])); }}
               />
             )}
           </WidgetCard>
           <WidgetCard ids={['ageBuckets']} title="Vulnerability age" subtitle="Days since first found (open)">
             {(r) => (
               <BucketBars
-                data={ordered(r.ageBuckets.map((x) => ({ label: String(x.label), value: num(x.value) })), ['0-30', '31-60', '61-90', '91-180', '180+'])}
-                onSelect={(l) => { const [lo, hi] = BUCKETS[l]; drill('vulnerabilities', OPEN(), hi === null ? lcond('vulnerability_age_days', '≥', lo) : lcond('vulnerability_age_days', 'between', [lo, hi])); }}
+                data={ordered(r.ageBuckets.map((x) => ({ label: String(x.label), value: num(x.value) })), ['0-30', '31-60', '61-90', '91-180', '180+', 'Unknown']).filter((d) => d.label !== 'Unknown' || d.value > 0)}
+                onSelect={(l) => { if (l === 'Unknown') return drill('vulnerabilities', ...OPEN(), lcond('vulnerability_age_days', 'is empty')); const [lo, hi] = BUCKETS[l]; drill('vulnerabilities', ...OPEN(), hi === null ? lcond('vulnerability_age_days', '≥', lo) : lcond('vulnerability_age_days', 'between', [lo, hi])); }}
               />
             )}
           </WidgetCard>
@@ -152,7 +156,7 @@ function PageBody() {
             {(r) => (
               <TopTable
                 rows={r.topAssets}
-                onRow={(x) => drill('vulnerabilities', OPEN(), lcond('gold_asset_id', 'is', String(x.gold_asset_id)))}
+                onRow={(x) => drill('vulnerabilities', ...OPEN(), lcond('gold_asset_id', 'is', String(x.gold_asset_id)))}
                 columns={[
                   { key: 'hostname', label: 'Host', mono: true },
                   { key: 'criticality', label: 'Criticality', render: (x) => <CritBadge value={x.criticality} /> },
@@ -167,7 +171,7 @@ function PageBody() {
             {(r) => (
               <TopTable
                 rows={r.topVulns}
-                onRow={(x) => drill('vulnerabilities', OPEN(), lcond('vulnerability_name', 'is', String(x.vulnerability_name)))}
+                onRow={(x) => drill('vulnerabilities', ...OPEN(), lcond('vulnerability_name', 'is', String(x.vulnerability_name)))}
                 columns={[
                   { key: 'vulnerability_name', label: 'Vulnerability', className: 'max-w-[11rem]' },
                   { key: 'cve', label: 'CVE', mono: true },
@@ -181,7 +185,7 @@ function PageBody() {
             {(r) => (
               <TopTable
                 rows={r.topSoftware}
-                onRow={(x) => drill('vulnerabilities', OPEN(), lcond('software_name', 'is', String(x.software_name)))}
+                onRow={(x) => drill('vulnerabilities', ...OPEN(), lcond('software_name', 'is', String(x.software_name)))}
                 columns={[
                   { key: 'software_name', label: 'Software', className: 'max-w-[9rem]' },
                   { key: 'recommended_version', label: 'Recommended', className: 'max-w-[9rem]' },
@@ -199,18 +203,18 @@ function PageBody() {
       <Section title="Risk and inventory">
         <div className="grid gap-3 lg:grid-cols-12">
           <WidgetCard ids={['riskByBusinessUnit']} title="Risk by business unit" subtitle="Open findings stacked by severity" className="lg:col-span-6">
-            {(r) => <SeverityStack rows={r.riskByBusinessUnit} groupKey="business_unit" onSelect={(bu, sev) => drill('vulnerabilities', OPEN(), lcond('business_unit', 'is', bu), lcond('severity', 'is', sev))} />}
+            {(r) => <SeverityStack rows={r.riskByBusinessUnit} groupKey="business_unit" onSelect={(bu, sev) => drill('vulnerabilities', ...OPEN(), lcond('business_unit', 'is', bu), lcond('severity', 'is', sev))} />}
           </WidgetCard>
           <WidgetCard ids={['assetsByCriticality', 'assetsByClass']} title="Asset inventory" subtitle="By criticality and by asset class" className="lg:col-span-6">
             {(r) => {
               const crit = ['Critical', 'High', 'Medium', 'Low'];
               const a = r.assetsByCriticality.map((x) => ({ name: String(x.label), value: num(x.value) }));
-              const byCrit = crit.map((n) => a.find((x) => x.name === n)).filter(Boolean) as typeof a;
+              const byCrit = (crit.map((n) => a.find((x) => x.name === n)).filter(Boolean) as typeof a).concat(a.filter((x) => !crit.includes(x.name)));
               const byClass = r.assetsByClass.map((x, i) => ({ name: String(x.label), value: num(x.value), i }));
               return (
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div><div className="mb-2 text-xs font-medium text-muted-foreground">By criticality</div><Donut data={byCrit} onSelect={(n) => drill('assets', lcond('criticality', 'is', n))} /></div>
-                  <div><div className="mb-2 text-xs font-medium text-muted-foreground">By asset class</div><Donut data={byClass} onSelect={(n) => drill('assets', lcond('asset_class', 'is', n))} /></div>
+                  <div><div className="mb-2 text-xs font-medium text-muted-foreground">By criticality</div><Donut data={byCrit} onSelect={(n) => drill('assets', eqOrUnknown('criticality', n, crit))} /></div>
+                  <div><div className="mb-2 text-xs font-medium text-muted-foreground">By asset class</div><Donut data={byClass} onSelect={(n) => drill('assets', eqOrUnknown('asset_class', n, byClass.map((x) => x.name).filter((x) => !x.startsWith('Unknown'))))} /></div>
                 </div>
               );
             }}

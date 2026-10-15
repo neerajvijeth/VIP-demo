@@ -30,7 +30,7 @@ export async function runDataCheck(token?: string): Promise<DataCheck> {
   if (state && state.length) {
     const open = state.filter((s) => !lower(sem.values.closedStates).has(s.toLowerCase()));
     if (!open.length) warnings.push(`Every value in "${L('te_state')}" (${state.slice(0, 8).join(', ')}) is treated as closed (CLOSED_STATES = ${sem.values.closedStates.join(', ')}), so "open" counts will be 0.`);
-    else info.push(`Open findings = "${L('te_state')}" not in [${sem.values.closedStates.join(', ')}]. States found: ${state.slice(0, 8).join(', ')}.`);
+    else info.push(`Open findings = "${L('te_state')}" (else "df_status") not in [${sem.values.closedStates.join(', ')}, RESOLVED, CLOSED]. States found: ${state.slice(0, 8).join(', ')}.`);
   }
   for (const e of ['assets', 'vulnerabilities'] as const) {
     if (!isSelectableColumn(e, L('snapshot_date'))) info.push(`${sem.tables[e]} has no "${L('snapshot_date')}" column: the "Latest snapshot only" switch is disabled and all rows are used.`);

@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/overlay
 import { Delta, tooltipStyle } from './widgets';
 import { fmtNum, titleize } from '@/lib/utils';
 
-export type Series = { date: string; value: number | null }[];
+export type Series = { date: string; value: number | null; suspect?: boolean }[];
 export function useKpiSeries() {
   return useQuery({ queryKey: ['kpis'], queryFn: () => Api.kpis(), staleTime: 5 * 60_000, retry: 0 });
 }
@@ -23,11 +23,12 @@ const FEATURED: { name: string; label: string; goodWhen: 'up' | 'down' | 'neutra
   { name: 'average_risk_score', label: 'Average risk score', goodWhen: 'down' },
 ];
 
-const last = (s?: Series) => s?.filter((p) => p.value !== null).slice(-2) ?? [];
+/** Latest two usable points: suspect runs (a >50% jump in one day) never become "today" or "previous". */
+const last = (s?: Series) => s?.filter((p) => p.value !== null && !p.suspect).slice(-2) ?? [];
 
 function TrendCard({ label, series, goodWhen, compact }: { label: string; series: Series; goodWhen: 'up' | 'down' | 'neutral'; compact?: boolean }) {
   const [prev, cur] = last(series);
-  const data = series.map((p) => ({ date: p.date, v: p.value }));
+  const data = series.map((p) => ({ date: p.date, v: p.suspect ? null : p.value, s: p.suspect ? p.value : null }));
   return (
     <Card className={compact ? 'p-3' : 'p-4'}>
       <div className="truncate text-xs font-medium text-muted-foreground" title={label}>{label}</div>
@@ -42,6 +43,7 @@ function TrendCard({ label, series, goodWhen, compact }: { label: string; series
             <YAxis hide domain={['dataMin', 'dataMax']} />
             <Tooltip {...tooltipStyle} formatter={(v: any) => [fmtNum(Number(v), 1), label]} labelFormatter={(_l, p: any) => p?.[0]?.payload?.date ?? ''} />
             <Line type="monotone" dataKey="v" stroke="hsl(var(--primary))" strokeWidth={1.75} dot={false} isAnimationActive={false} connectNulls />
+            <Line dataKey="s" stroke="none" dot={{ r: 3.5, stroke: 'hsl(var(--sev-medium))', strokeWidth: 1.5, fill: 'hsl(var(--card))' }} isAnimationActive={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -82,6 +84,12 @@ export function TrendsRow() {
           </Popover>
         )}
       </div>
+      {(q.data?.suspectDates?.length || q.data?.skippedRuns) ? (
+        <p className="mb-2 text-xs text-sev-medium">
+          {q.data!.suspectDates?.length ? `Suspect runs on ${q.data!.suspectDates.join(', ')} (headline counts moved more than 50% in a day) are shown as hollow points and not used for the change figures. ` : ''}
+          {q.data!.skippedRuns ? `${q.data!.skippedRuns} partial run${q.data!.skippedRuns === 1 ? ' was' : 's were'} skipped in favour of a complete one.` : ''}
+        </p>
+      ) : null}
       {q.isLoading ? (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-36" />)}</div>
       ) : q.isError ? (

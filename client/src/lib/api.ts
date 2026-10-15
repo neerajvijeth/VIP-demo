@@ -69,7 +69,7 @@ export const Api = {
     api<{ row: Record<string, any> }>(`/api/query/detail?entity=${entity}&key=${encodeURIComponent(key)}${snapshot ? `&snapshot=${encodeURIComponent(snapshot)}` : ''}`),
   widgets: (widgets: string[], filters: GlobalFilters, options: QueryOptions, signal?: AbortSignal) =>
     api<Record<string, WidgetResult>>('/api/overview/widgets', { method: 'POST', json: { widgets, filters, options, fresh: freshFlag.on }, signal }),
-  kpis: () => api<{ metrics: Record<string, { date: string; value: number | null }[]> }>(`/api/kpis${freshFlag.on ? '?fresh=1' : ''}`),
+  kpis: () => api<{ metrics: Record<string, { date: string; value: number | null; suspect?: boolean }[]>; suspectDates?: string[]; skippedRuns?: number }>(`/api/kpis${freshFlag.on ? '?fresh=1' : ''}`),
   dataCheck: () => api<{ warnings: string[]; info: string[] }>('/api/meta/data-check'),
   env: () => api<{ env: string; exportMaxRows: number; catalog: string; schema: string }>('/api/env'),
   customRun: (sql: string, maxRows: number, signal?: AbortSignal) =>
