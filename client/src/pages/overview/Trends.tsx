@@ -6,6 +6,7 @@ import { Card, ErrorPanel, Skeleton } from '@/components/ui/primitives';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/overlay';
 import { Delta, tooltipStyle } from './widgets';
 import { fmtNum, titleize } from '@/lib/utils';
+import { NotAppliedBanner } from './NotApplied';
 
 export type Series = { date: string; value: number | null; suspect?: boolean }[];
 export function useKpiSeries() {
@@ -84,6 +85,7 @@ export function TrendsRow() {
           </Popover>
         )}
       </div>
+      <NotAppliedBanner reason="Trends come from the KPI metrics table (gold_kpi_metrics), which only holds daily totals for the whole estate. It has no business unit, region, asset or finding columns, so nothing can be filtered here." />
       {(q.data?.suspectDates?.length || q.data?.skippedRuns) ? (
         <p className="mb-2 text-xs text-sev-medium">
           {q.data!.suspectDates?.length ? `Suspect runs on ${q.data!.suspectDates.join(', ')} (headline counts moved more than 50% in a day) are shown as hollow points and not used for the change figures. ` : ''}

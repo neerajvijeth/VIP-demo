@@ -9,7 +9,7 @@ import { SEVERITY_ORDER } from '@/components/ui/badges';
 import { GlobalFilterBar } from './GlobalFilterBar';
 import { OverviewDataProvider } from './data';
 import { TrendsRow, useKpiSeries, type Series } from './Trends';
-import { CustomSummaries } from './CustomSummaries';
+import { BreakdownCard } from './Breakdown';
 import { DataCheckBanner } from './DataCheckBanner';
 import { freshFlag } from '@/lib/api';
 import { BucketBars, CritBadge, Donut, KpiCard, Meter, SeverityStack, StackedBar, TopTable, WidgetCard, colorFor, num } from './widgets';
@@ -204,7 +204,14 @@ function PageBody() {
         </div>
       </Section>
 
-      <CustomSummaries />
+      <Section title="Business unit and region">
+        <div className="grid gap-3 xl:grid-cols-2">
+          <BreakdownCard title="By business unit" groupLabel="Business unit" subtitle="Assets and open findings per business unit · click a row for the records" assetsId="assetsByBusinessUnit" findingsId="findingsByBusinessUnit"
+            onRow={(label, known) => drill('vulnerabilities', ...OPEN(), eqOrUnknown('business_unit', label, known))} />
+          <BreakdownCard title="By region" groupLabel="Region" subtitle="Assets and open findings per region · click a row for the records" assetsId="assetsByRegion" findingsId="findingsByRegion"
+            onRow={(label, known) => drill('vulnerabilities', ...OPEN(), eqOrUnknown('region', label, known))} />
+        </div>
+      </Section>
 
       <Section title="Risk and inventory">
         <div className="grid gap-3 lg:grid-cols-12">

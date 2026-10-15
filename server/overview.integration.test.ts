@@ -104,4 +104,20 @@ run('Overview numbers (live warehouse)', () => {
       expect(Array.isArray(rows), id).toBe(true);
     }
   }, 400_000);
+
+  it('business unit and region breakdowns add up to the headline numbers, also under filters', async () => {
+    for (const filters of [{}, { asset_class: ['Server'] }, { extra: [ex('vulnerabilities', 'severity', 'is', 'Critical')] }, { extra: [ex('assets', 'os_name', 'contains', 'Windows')] }] as any[]) {
+      const assets = n((await widget('kpiTotalAssets', filters))[0].value);
+      const open = n((await widget('kpiOpenVulns', filters))[0].value);
+      const ch = n((await widget('kpiCritHigh', filters))[0].value);
+      const kev = n((await widget('kpiKev', filters))[0].value);
+      for (const g of ['BusinessUnit', 'Region']) {
+        expect(sum(await widget(`assetsBy${g}`, filters)), `assets ${g} ${JSON.stringify(filters).slice(0, 40)}`).toBe(assets);
+        const f = await widget(`findingsBy${g}`, filters);
+        expect(f.reduce((s, r) => s + n(r.findings), 0), `findings ${g}`).toBe(open);
+        expect(f.reduce((s, r) => s + n(r.crit_high), 0), `crit+high ${g}`).toBe(ch);
+        expect(f.reduce((s, r) => s + n(r.kev), 0), `kev ${g}`).toBe(kev);
+      }
+    }
+  }, 600_000);
 });

@@ -68,7 +68,7 @@ export function AppShell() {
       <TopBar />
       <div key={mode} className={`flex min-h-0 flex-1 ${anim}`}>
         {mode === 'dashboard' && <Sidebar />}
-        <main className="print-root min-w-0 flex-1 overflow-auto">
+        <main className="print-root relative min-w-0 flex-1 overflow-auto">
           <Outlet />
         </main>
       </div>

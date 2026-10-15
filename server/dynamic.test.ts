@@ -68,6 +68,15 @@ describe('widgets follow the mapping and values', () => {
     expect(sql('topVulns')).toContain('COALESCE(`vulnerability_name`, `title`)');
     expect(sql('topVulns')).toContain('MAX_BY(`severity`');
   });
+  it('business unit / region breakdowns: same scope as the headline cards, Unknown bucket, open findings only', () => {
+    for (const [id, col] of [['assetsByBusinessUnit', 'business_unit'], ['assetsByRegion', 'region'], ['findingsByBusinessUnit', 'business_unit'], ['findingsByRegion', 'region']] as const) {
+      expect(sql(id), id).toContain(`COALESCE(NULLIF(CAST(\`${col}\` AS STRING), ''), 'Unknown')`);
+    }
+    expect(sql('findingsByRegion')).toContain('COUNT(*) AS findings');
+    expect(sql('findingsByRegion')).toContain("NOT IN ('FIXED', 'RESOLVED', 'CLOSED')");
+    expect(WIDGETS.find((w) => w.id === 'assetsByRegion')!.entity).toBe('assets');
+    expect(WIDGETS.find((w) => w.id === 'findingsByRegion')!.entity).toBe('vulnerabilities');
+  });
   it('reports the physical columns each widget needs', () => {
     expect(requiredColumns(WIDGETS.find((w) => w.id === 'kpiKev')!).sort()).toEqual(['df_status', 'kev_flag', 'te_state']);
     setSemantics({ columns: { kev_flag: 'is_kev' } });

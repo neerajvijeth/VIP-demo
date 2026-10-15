@@ -51,7 +51,8 @@
   color-scheme: dark;
 }
 
-html, body, #root { height: 100%; }
+/* The app shell is the only scroller: nothing may extend the document itself (that made the page scroll into empty space). */
+html, body, #root { height: 100%; overflow: hidden; }
 body { @apply bg-background text-foreground font-sans antialiased; font-size: 14px; font-feature-settings: 'cv11', 'ss01'; }
 * { @apply border-border; }
 ::selection { background: hsl(var(--primary) / 0.22); }

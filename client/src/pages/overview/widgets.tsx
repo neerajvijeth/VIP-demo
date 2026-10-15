@@ -7,6 +7,7 @@ import { cn, downloadText, fmtNum, timestamp } from '@/lib/utils';
 import { csvRow } from '@shared/csv';
 import { useWidget, type Row } from './data';
 import { toast } from '@/store/toast';
+import { NotAppliedPill } from './NotApplied';
 
 // ---------- helpers ----------
 export function useCountUp(target: number, ms = 700) {
@@ -93,6 +94,8 @@ export function WidgetCard({ ids, title, subtitle, className, children, bodyClas
   const fetching = states.some((s) => s.fetching);
   const byId = Object.fromEntries(ids.map((id, i) => [id, states[i].rows ?? []]));
   const ms = Math.max(0, ...states.map((s) => s.elapsedMs ?? 0));
+  // fixed filters this card's table has no column for (shown instead of silently ignoring them)
+  const ignored = [...new Set(states.flatMap((s) => s.ignoredFilters ?? []))].map((f) => ({ id: f, label: f.replace(/_/g, ' '), text: '' }));
 
   const download = () => {
     ids.forEach((id) => {
@@ -109,6 +112,7 @@ export function WidgetCard({ ids, title, subtitle, className, children, bodyClas
         <div className="min-w-0">
           <h3 className="truncate font-display text-[19px] leading-6">{title}</h3>
           {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
+          <NotAppliedPill className="mt-1" items={ignored} reason="This card's table has no such column, so the filter cannot narrow it." />
         </div>
         <div className="no-print flex shrink-0 items-center gap-0.5 text-muted-foreground">
           {fetching && !loading && <RefreshCw size={12} className="mr-1 animate-spin" aria-label="Refreshing" />}

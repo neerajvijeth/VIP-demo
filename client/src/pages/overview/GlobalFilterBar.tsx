@@ -8,6 +8,7 @@ import { Api } from '@/lib/api';
 import { useFilters } from '@/store/filters';
 import { L } from '@shared/semantics';
 import { ExtraFilters } from './ExtraFilters';
+import { NotAppliedPill, useActiveFilters } from './NotApplied';
 
 const FILTERS: { key: 'business_unit' | 'region' | 'country' | 'criticality' | 'asset_class' | 'device_type'; label: string }[] = [
   { key: 'business_unit', label: 'Business unit' },
@@ -24,6 +25,7 @@ export function GlobalFilterBar() {
   const fv = useQuery({ queryKey: ['fields', 'vulnerabilities'], queryFn: () => Api.fields('vulnerabilities'), staleTime: Infinity });
   const noSnapshot = !!fa.data && !!fv.data && !fa.data.scope.snapshot && !fv.data.scope.snapshot;
   const active = countActiveFilters(filters);
+  const activeList = useActiveFilters();
   return (
     <div className="no-print sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-3 backdrop-blur-sm sm:px-6">
       <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-2">
@@ -58,8 +60,10 @@ export function GlobalFilterBar() {
           <Switch disabled={noSnapshot} checked={options.latestSnapshotOnly} onChange={(b) => setOptions({ latestSnapshotOnly: b })} label="Latest snapshot only" />
         </div>
       </div>
-      <p className="mx-auto mt-1.5 flex max-w-[1800px] items-center gap-1.5 text-[11px] text-muted-foreground">
-        <Info size={12} /> Applied to: Assets &amp; Vulnerabilities (not Trends — the KPI metrics table has no dimension columns). A filter on a column of the other table links through the asset ID.
+      <p className="mx-auto mt-1.5 flex max-w-[1800px] flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+        <Info size={12} /> Filters apply to every card. A filter on a column of the other table links through the asset ID.
+        <NotAppliedPill items={activeList} reason="Trends come from the KPI metrics table, which has no per-asset columns, so it always shows the whole estate." className="ml-1" />
+        {activeList.length > 0 && <span className="text-muted-foreground">on Trends</span>}
       </p>
     </div>
   );

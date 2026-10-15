@@ -94,6 +94,15 @@ export const WIDGETS: WidgetDef[] = [
   // Row 4
   v('riskByBusinessUnit', (x) => `SELECT ${lab(x.c('business_unit'))} AS business_unit, ${lab(x.c('severity'))} AS severity, COUNT(*) AS value FROM ${x.table} ${x.where} AND ${x.open()} GROUP BY 1, 2`),
   // Business criticality. Missing or defaulted values are shown as such: never as Low.
+  // Breakdown cards: the same two numbers for any attribute. Assets come from the asset scope, findings from the finding scope,
+  // so each honours every filter exactly like the headline cards, and each column adds up to its headline number.
+  ...(['business_unit', 'region'] as const).flatMap((attr) => {
+    const name = attr === 'business_unit' ? 'BusinessUnit' : 'Region';
+    return [
+      a(`assetsBy${name}`, (x) => `SELECT ${lab(x.c(attr))} AS label, COUNT(DISTINCT ${x.c('gold_asset_id')}) AS value FROM ${x.table} ${x.where} GROUP BY 1`),
+      v(`findingsBy${name}`, (x) => `SELECT ${lab(x.c(attr))} AS label, COUNT(*) AS findings, COUNT_IF(${x.critHigh()}) AS crit_high, COUNT_IF(COALESCE(${x.c('kev_flag')}, false) = true) AS kev, COUNT(DISTINCT ${x.c('gold_asset_id')}) AS assets_affected FROM ${x.table} ${x.where} AND ${x.open()} GROUP BY 1`),
+    ];
+  }),
   a('assetsByCriticality', (x) => `SELECT CASE WHEN ${x.c('criticality')} IS NULL${isSelectableColumn('assets', L('criticality_normalization_method')) ? ` OR LOWER(COALESCE(${x.c('criticality_normalization_method')}, '')) LIKE '%default%'` : ''} THEN 'Unknown (defaulted)' ELSE ${x.c('criticality')} END AS label, COUNT(DISTINCT ${x.c('gold_asset_id')}) AS value FROM ${x.table} ${x.where} GROUP BY 1`),
   a('assetsByClass', (x) => `SELECT ${lab(x.c('asset_class'))} AS label, COUNT(DISTINCT ${x.c('gold_asset_id')}) AS value FROM ${x.table} ${x.where} GROUP BY 1`),
   a('coverage', (x) => `SELECT COUNT(DISTINCT ${x.c('gold_asset_id')}) AS total, COUNT(DISTINCT CASE WHEN ${x.c('te_has_agent')} = true THEN ${x.c('gold_asset_id')} END) AS with_agent, COUNT(DISTINCT CASE WHEN ${x.c('te_has_agent')} = false THEN ${x.c('gold_asset_id')} END) AS without_agent, COUNT(DISTINCT CASE WHEN ${x.c('te_has_agent')} IS NULL THEN ${x.c('gold_asset_id')} END) AS unknown_agent, COUNT(DISTINCT CASE WHEN ${x.c('asset_aging_status')} = ${x.lit(semantics().values.staleStatus)} THEN ${x.c('gold_asset_id')} END) AS stale, COUNT(DISTINCT CASE WHEN ${x.c('asset_aging_status')} = ${x.lit(semantics().values.agingStatus)} THEN ${x.c('gold_asset_id')} END) AS aging FROM ${x.table} ${x.where}`),

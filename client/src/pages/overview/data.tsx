@@ -9,6 +9,7 @@ export const BATCHES: Record<string, string[]> = {
   kpis: ['kpiTotalAssets', 'kpiOpenVulns', 'kpiCritHigh', 'kpiKev', 'kpiSla', 'kpiExposedCritHigh'],
   dist: ['severityDonut', 'slaStatus', 'overdueBuckets', 'ageBuckets'],
   tops: ['topAssets', 'topVulns', 'topSoftware'],
+  breakdown: ['assetsByBusinessUnit', 'findingsByBusinessUnit', 'assetsByRegion', 'findingsByRegion'],
   inventory: ['riskByBusinessUnit', 'assetsByCriticality', 'assetsByClass', 'coverage', 'toolVisibility', 'eolAssets'],
 };
 
@@ -20,6 +21,8 @@ export interface WState {
   unavailable?: string;
   rows?: Row[];
   elapsedMs?: number;
+  /** fixed filters this card could not apply (the column does not exist in its table) */
+  ignoredFilters?: string[];
   refetch: () => void;
 }
 const Ctx = createContext<Record<string, WState>>({});
@@ -52,6 +55,7 @@ export function OverviewDataProvider({ children }: { children: ReactNode }) {
           unavailable: w && 'unavailable' in w ? w.unavailable : undefined,
           rows: w && 'rows' in w ? (w.rows as Row[]) : undefined,
           elapsedMs: w && 'rows' in w ? w.elapsedMs : undefined,
+          ignoredFilters: w && 'rows' in w ? w.ignoredFilters : undefined,
           refetch: () => void r.refetch(),
         };
       }
