@@ -35,7 +35,7 @@ export const useSaved = create<SavedState>()(
         );
         set((s) => {
           const map = new Map(s.views.map((v) => [`${v.entity}:${v.name}`, v]));
-          for (const v of incoming) map.set(`${v.entity}:${v.name}`, { ...v, id: uid(), createdAt: v.createdAt ?? Date.now(), columns: v.columns ?? null, sort: v.sort ?? null, options: v.options ?? { latestSnapshotOnly: true, validOnly: true } });
+          for (const v of incoming) map.set(`${v.entity}:${v.name}`, { ...v, id: uid(), createdAt: v.createdAt ?? Date.now(), columns: v.columns ?? null, sort: v.sort ?? null, options: v.options ?? { latestSnapshotOnly: true } });
           return { views: [...map.values()] };
         });
         return incoming.length;

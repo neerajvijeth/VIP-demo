@@ -171,14 +171,12 @@ export function treeToSql(entity: Entity, tree: Group | undefined | null, bag: P
   return nodeSql(tree, { entity, bag, conditions: 0 }, 1);
 }
 
-/** Full `WHERE ...` clause: snapshot/validity scope AND (user tree). Always returns a valid clause. */
+/** Full `WHERE ...` clause: snapshot scope AND (user tree). (The "valid records only" switch was removed: is_valid is no longer applied.) Always returns a valid clause. */
 export function buildWhere(entity: Entity, tree: Group | undefined | null, options: Partial<QueryOptions> | undefined, bag = new ParamBag()) {
   const parts: string[] = [];
   // Scope clauses apply only when the column exists on this table (discovered schema), so other data shapes still work.
   const snap = L('snapshot_date');
-  const valid = L('is_valid');
   if (options?.latestSnapshotOnly && isSelectableColumn(entity, snap)) parts.push(`${quoteIdent(snap)} = (SELECT MAX(${quoteIdent(snap)}) FROM ${entityTable(entity)})`);
-  if (options?.validOnly && isSelectableColumn(entity, valid)) parts.push(`${quoteIdent(valid)} = true`);
   const user = treeToSql(entity, tree, bag);
   if (user) parts.push(`(${user})`);
   return { where: parts.length ? `WHERE ${parts.join(' AND ')}` : 'WHERE TRUE', params: bag.params, bag };

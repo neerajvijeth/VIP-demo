@@ -18,6 +18,7 @@ import { useOpenBuilder, useRefreshed } from '@/lib/hooks';
 import { critHighCond, lcond, openCond } from '@/lib/sem';
 import { semantics } from '@shared/semantics';
 import { fmtNum } from '@/lib/utils';
+import { toast } from '@/store/toast';
 
 /** Click-through filter for "open": same idea as the cards (open state, no duplicates). */
 const OPEN = (): Condition[] => [openCond(), lcond('deduplication_status', 'is not', 'Duplicate')];
@@ -54,7 +55,12 @@ function PageBody() {
   /** Click-through: current global filters + the clicked segment → pre-filled builder. */
   const drill = (entity: Entity, ...extra: Condition[]) => {
     const base = filtersToTree(filters);
-    open(entity, { ...base, children: [...base.children, ...extra] }, options);
+    // filters you added: the ones on this page's own table go along; a filter on the other table cannot be expressed here
+    const added = filters.extra ?? [];
+    const own = added.filter((e) => e.entity === entity).map((e) => e.condition);
+    const skipped = added.filter((e) => e.entity !== entity);
+    if (skipped.length) toast.warning('Some filters were not carried over', `${skipped.map((e) => e.condition.field).join(', ')} ${skipped.length === 1 ? 'is a' : 'are'} ${entity === 'assets' ? 'finding' : 'asset'} field${skipped.length === 1 ? '' : 's'} and cannot be applied on the ${entity === 'assets' ? 'Assets' : 'Vulnerabilities'} page.`);
+    open(entity, { ...base, children: [...base.children, ...own, ...extra] }, options);
   };
 
   const hygiene = (

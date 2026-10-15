@@ -7,6 +7,7 @@ import { ValuePicker } from '@/components/ui/pickers';
 import { Api } from '@/lib/api';
 import { useFilters } from '@/store/filters';
 import { L } from '@shared/semantics';
+import { ExtraFilters } from './ExtraFilters';
 
 const FILTERS: { key: 'business_unit' | 'region' | 'country' | 'criticality' | 'asset_class' | 'device_type'; label: string }[] = [
   { key: 'business_unit', label: 'Business unit' },
@@ -22,7 +23,6 @@ export function GlobalFilterBar() {
   const fa = useQuery({ queryKey: ['fields', 'assets'], queryFn: () => Api.fields('assets'), staleTime: Infinity });
   const fv = useQuery({ queryKey: ['fields', 'vulnerabilities'], queryFn: () => Api.fields('vulnerabilities'), staleTime: Infinity });
   const noSnapshot = !!fa.data && !!fv.data && !fa.data.scope.snapshot && !fv.data.scope.snapshot;
-  const noValid = !!fa.data && !!fv.data && !fa.data.scope.valid && !fv.data.scope.valid;
   const active = countActiveFilters(filters);
   return (
     <div className="no-print sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-3 backdrop-blur-sm sm:px-6">
@@ -50,16 +50,16 @@ export function GlobalFilterBar() {
             options={[{ value: 'all', label: 'All' }, { value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]}
           />
         </div>
+        <ExtraFilters />
         <Button variant="ghost" size="sm" onClick={clear} disabled={!active} aria-label="Clear all filters">
           <FilterX size={14} /> Clear all{active ? ` (${active})` : ''}
         </Button>
         <div className="ml-auto flex items-center gap-4">
           <Switch disabled={noSnapshot} checked={options.latestSnapshotOnly} onChange={(b) => setOptions({ latestSnapshotOnly: b })} label="Latest snapshot only" />
-          <Switch disabled={noValid} checked={options.validOnly} onChange={(b) => setOptions({ validOnly: b })} label="Valid records only" />
         </div>
       </div>
       <p className="mx-auto mt-1.5 flex max-w-[1800px] items-center gap-1.5 text-[11px] text-muted-foreground">
-        <Info size={12} /> Applied to: Assets &amp; Vulnerabilities (not Trends — the KPI metrics table has no dimension columns).
+        <Info size={12} /> Applied to: Assets &amp; Vulnerabilities (not Trends — the KPI metrics table has no dimension columns). A filter on a column of the other table links through the asset ID.
       </p>
     </div>
   );

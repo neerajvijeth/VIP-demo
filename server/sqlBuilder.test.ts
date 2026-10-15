@@ -30,9 +30,11 @@ describe('structure', () => {
     const r = buildWhere(V, grp('AND', [cond('severity', 'is', 'Low', true)]), off);
     expect(r.where).toContain('NOT (COALESCE(`severity` = :p0, FALSE))');
   });
-  it('appends snapshot and validity scope with AND and wraps the user tree', () => {
+  it('appends the snapshot scope with AND and wraps the user tree (is_valid is no longer applied)', () => {
     const r = buildWhere('assets', grp('OR', [cond('hostname', 'contains', 'x')]), { latestSnapshotOnly: true, validOnly: true });
-    expect(r.where).toMatch(/^WHERE `snapshot_date` = \(SELECT MAX\(`snapshot_date`\) FROM `[\w-]+`\.`[\w-]+`\.`gold_assets`\) AND `is_valid` = true AND \(\(/);
+    expect(r.where).toMatch(/^WHERE `snapshot_date` = \(SELECT MAX\(`snapshot_date`\) FROM `[\w-]+`\.`[\w-]+`\.`gold_assets`\) AND \(\(/);
+    expect(r.where).not.toContain('is_valid');
+    expect(buildWhere('vulnerabilities', grp('AND', []), { latestSnapshotOnly: false, validOnly: true } as any).where).toBe('WHERE TRUE');
   });
   it('enforces depth and condition limits', () => {
     let t: Group = grp('AND', [cond('kev_flag', 'is true')]);

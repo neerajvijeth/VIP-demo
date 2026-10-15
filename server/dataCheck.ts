@@ -34,7 +34,6 @@ export async function runDataCheck(token?: string): Promise<DataCheck> {
   }
   for (const e of ['assets', 'vulnerabilities'] as const) {
     if (!isSelectableColumn(e, L('snapshot_date'))) info.push(`${sem.tables[e]} has no "${L('snapshot_date')}" column: the "Latest snapshot only" switch is disabled and all rows are used.`);
-    if (!isSelectableColumn(e, L('is_valid'))) info.push(`${sem.tables[e]} has no "${L('is_valid')}" column: the "Valid records only" switch is disabled.`);
   }
   return { warnings, info };
 }

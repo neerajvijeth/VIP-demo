@@ -132,9 +132,7 @@ export function BuilderPage({ entity }: { entity: Entity }) {
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2" aria-label="Scope">
         <Switch disabled={fieldsData?.scope.snapshot === false} checked={st.options.latestSnapshotOnly} onChange={(b) => st.setOptions({ latestSnapshotOnly: b })} label="Latest snapshot only" title={`${L('snapshot_date')} = MAX(${L('snapshot_date')})`} />
-        <Switch disabled={fieldsData?.scope.valid === false} checked={st.options.validOnly} onChange={(b) => st.setOptions({ validOnly: b })} label="Valid records only" title="is_valid = true" />
         {st.options.latestSnapshotOnly && fieldsData?.scope.snapshot !== false && <Badge tone="primary">snapshot = latest</Badge>}
-        {st.options.validOnly && fieldsData?.scope.valid !== false && <Badge tone="primary">{L('is_valid')}</Badge>}
       </div>
 
       <Card className="p-0">

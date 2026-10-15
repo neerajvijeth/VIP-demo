@@ -5,7 +5,8 @@ import { EMPTY_FILTERS } from '../shared/types';
 import { entityTable } from './config';
 import { query } from './db';
 import { syncSchema } from './schema';
-import { buildWhere } from './sqlBuilder';
+import { widgetScope } from './overviewScope';
+import type { ExtraFilter } from '../shared/types';
 import { WIDGET_BY_ID, makeCtx } from './overviewWidgets';
 import { canonicalSource } from './overviewSource';
 
@@ -16,7 +17,8 @@ const OPTS = { latestSnapshotOnly: true, validOnly: true };
 
 async function widget(id: string, filters: Partial<typeof EMPTY_FILTERS> = {}) {
   const def = WIDGET_BY_ID.get(id)!;
-  const { where, params } = buildWhere(def.entity, filtersToTree({ ...EMPTY_FILTERS, ...filters }), OPTS);
+  const f = { ...EMPTY_FILTERS, ...filters };
+  const { where, params } = widgetScope(def.entity, filtersToTree(f), f.extra ?? [], OPTS);
   return query(def.sql(makeCtx(canonicalSource(def.entity), where)), params);
 }
 const n = (v: unknown) => Number(v);
@@ -74,4 +76,32 @@ run('Overview numbers (live warehouse)', () => {
     expect(open).toBe(await one(`SELECT count(*) FROM ${openSql()} o JOIN ${assetsSql()} a ON a.gold_asset_id = o.gold_asset_id WHERE a.asset_class = 'Server'`));
     expect(open).toBeLessThan(n((await widget('kpiOpenVulns'))[0].value));
   }, 240_000);
+
+  const ex = (entity: 'assets' | 'vulnerabilities', field: string, operator: string, value: any = null): ExtraFilter => ({ id: field, entity, condition: { type: 'condition', field, operator, value, not: false } });
+
+  it('added filter on an ASSET-only column applies to finding cards (bridge through the asset id)', async () => {
+    const extra = [ex('assets', 'os_name', 'contains', 'Windows')];
+    const direct = await one(`SELECT count(*) FROM ${openSql()} o JOIN ${assetsSql()} a ON a.gold_asset_id = o.gold_asset_id WHERE lower(a.os_name) LIKE '%windows%'`);
+    expect(n((await widget('kpiOpenVulns', { extra }))[0].value)).toBe(direct);
+    expect(n((await widget('kpiTotalAssets', { extra }))[0].value)).toBe(await one(`SELECT count(*) FROM ${assetsSql()} WHERE lower(os_name) LIKE '%windows%'`));
+    expect(direct).toBeGreaterThan(0);
+    expect(direct).toBeLessThan(n((await widget('kpiOpenVulns'))[0].value));
+  }, 240_000);
+
+  it('added filter on a FINDING-only column applies to asset cards (assets with an open matching finding)', async () => {
+    const extra = [ex('vulnerabilities', 'severity', 'is', 'Critical')];
+    const direct = await one(`SELECT count(DISTINCT a.gold_asset_id) FROM ${assetsSql()} a JOIN ${openSql()} o ON o.gold_asset_id = a.gold_asset_id WHERE o.severity = 'Critical'`);
+    expect(n((await widget('kpiTotalAssets', { extra }))[0].value)).toBe(direct);
+    expect(sum(await widget('assetsByClass', { extra }))).toBe(direct);          // charts still add up under the filter
+    expect(n((await widget('kpiOpenVulns', { extra }))[0].value)).toBe(await one(`SELECT count(*) FROM ${openSql()} WHERE severity = 'Critical'`));
+    expect(direct).toBeGreaterThan(0);
+  }, 240_000);
+
+  it('combined fixed + added filters, and a never-used column, work on every card', async () => {
+    const extra = [ex('assets', 'os_major_version', '≥', 0), ex('vulnerabilities', 'kev_flag', 'is true')];
+    for (const id of WIDGET_BY_ID.keys()) {
+      const rows = await widget(id, { asset_class: ['Server'], extra });
+      expect(Array.isArray(rows), id).toBe(true);
+    }
+  }, 400_000);
 });

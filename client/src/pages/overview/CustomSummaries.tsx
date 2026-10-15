@@ -24,8 +24,12 @@ function SummaryCard({ cfg }: { cfg: SummaryCardCfg }) {
 
   const tree = useMemo<Group>(() => {
     const base = filtersToTree(filters);
-    return cfg.entity === 'vulnerabilities' && cfg.openOnly ? { ...base, children: [...base.children, openCond()] } : base;
+    const own = (filters.extra ?? []).filter((e) => e.entity === cfg.entity).map((e) => e.condition); // filters you added on this card's own table
+    const withOwn = { ...base, children: [...base.children, ...own] };
+    return cfg.entity === 'vulnerabilities' && cfg.openOnly ? { ...withOwn, children: [...withOwn.children, openCond()] } : withOwn;
   }, [filters, cfg.entity, cfg.openOnly]);
+  // a filter on the other table cannot be expressed in this single-table summary
+  const skipped = (filters.extra ?? []).filter((e) => e.entity !== cfg.entity);
   const req: SummaryRequest | null = map.size ? { mode: 'summary', entity: cfg.entity, tree, options, summary: cfg.spec } : null;
   const title = `${metricLabel(cfg.spec.metrics[0], labelOf)} per ${cfg.spec.groupBy.map((g) => groupLabel(g, labelOf)).join(' and ')}`;
 
@@ -43,7 +47,8 @@ function SummaryCard({ cfg }: { cfg: SummaryCardCfg }) {
       <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="truncate font-display text-[22px] leading-6" title={title}>{title}</h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">From {cfg.entity === 'assets' ? 'assets' : 'vulnerabilities'} · uses the filters above</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">From {cfg.entity === 'assets' ? 'assets' : 'vulnerabilities'} · uses the filters above
+            {skipped.length > 0 && <span className="text-sev-medium" title={skipped.map((e) => e.condition.field).join(', ')}> · {skipped.length} filter{skipped.length === 1 ? '' : 's'} on {cfg.entity === 'assets' ? 'finding' : 'asset'} fields not applied here</span>}</p>
         </div>
         <div className="no-print flex items-center gap-1">
           <Button size="sm" variant={editing ? 'secondary' : 'ghost'} onClick={() => setEditing((e) => !e)} aria-pressed={editing}><Pencil size={13} /> {editing ? 'Done' : 'Edit'}</Button>

@@ -19,4 +19,4 @@ export function filtersToTree(f: GlobalFilters): Group {
 }
 
 export const countActiveFilters = (f: GlobalFilters) =>
-  FILTER_FIELDS.reduce((n, k) => n + (f[k].length ? 1 : 0), 0) + (f.internet_exposed !== 'all' ? 1 : 0);
+  FILTER_FIELDS.reduce((n, k) => n + (f[k].length ? 1 : 0), 0) + (f.internet_exposed !== 'all' ? 1 : 0) + (f.extra?.length ?? 0);

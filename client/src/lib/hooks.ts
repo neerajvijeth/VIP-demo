@@ -19,7 +19,7 @@ export function useFields(entity: Entity) {
   return { ...q, fields: q.data?.fields ?? [], columns: q.data?.columns ?? [], defaults: q.data?.defaultColumns ?? [], map, columnMap };
 }
 
-const DEFAULT_OPTIONS: QueryOptions = { latestSnapshotOnly: true, validOnly: true };
+const DEFAULT_OPTIONS: QueryOptions = { latestSnapshotOnly: true };
 
 /** Total row count under the default scope; powers the sidebar badges. */
 export function useTotalCount(entity: Entity) {

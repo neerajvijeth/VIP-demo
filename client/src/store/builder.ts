@@ -106,7 +106,7 @@ function make(entity: Entity): UseBoundStore<StoreApi<BuilderState>> {
       sort: null,
       pageSize: 50,
       page: 0,
-      options: { latestSnapshotOnly: true, validOnly: true },
+      options: { latestSnapshotOnly: true },
       ran: null,
       mode: 'rows',
       summary: emptySummary(entity),

@@ -35,7 +35,8 @@ export type Node = Group | Condition;
 
 export interface QueryOptions {
   latestSnapshotOnly: boolean;
-  validOnly: boolean;
+  /** Retired: the "valid records only" switch was removed and this is ignored. Kept so saved queries and links still load. */
+  validOnly?: boolean;
 }
 export interface SortSpec {
   field: string;
@@ -51,6 +52,9 @@ export interface RunRequest {
   options: QueryOptions;
 }
 
+/** A user-added Overview filter on ANY column of either table (the fixed filters below exist on both tables). */
+export interface ExtraFilter { id: string; entity: Entity; condition: Condition }
+
 /** Fixed global filters of the Overview page. */
 export interface GlobalFilters {
   business_unit: string[];
@@ -60,6 +64,8 @@ export interface GlobalFilters {
   internet_exposed: 'all' | 'yes' | 'no';
   asset_class: string[];
   device_type: string[];
+  /** filters on any other column; AND-ed with everything else */
+  extra?: ExtraFilter[];
 }
 export const FILTER_FIELDS = ['business_unit', 'region', 'country', 'criticality', 'asset_class', 'device_type'] as const;
 export const EMPTY_FILTERS: GlobalFilters = {
@@ -70,6 +76,7 @@ export const EMPTY_FILTERS: GlobalFilters = {
   internet_exposed: 'all',
   asset_class: [],
   device_type: [],
+  extra: [],
 };
 
 export const OPERATORS: Record<FieldType, string[]> = {

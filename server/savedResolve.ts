@@ -9,7 +9,7 @@ export interface BuilderPayload {
   tree: any;
   columns: string[] | null;
   sort: { field: string; dir: 'asc' | 'desc' } | null;
-  options: { latestSnapshotOnly: boolean; validOnly: boolean };
+  options: { latestSnapshotOnly: boolean; validOnly?: boolean };
   mode: 'rows' | 'summary';
   summary?: any;
 }
@@ -26,7 +26,7 @@ export function cleanPayload(p: any): BuilderPayload {
     tree: p.tree,
     columns: Array.isArray(p.columns) ? p.columns.filter((c: unknown): c is string => typeof c === 'string').slice(0, 250) : null,
     sort: p.sort && typeof p.sort.field === 'string' ? { field: p.sort.field, dir: p.sort.dir === 'asc' ? 'asc' : 'desc' } : null,
-    options: { latestSnapshotOnly: opts.latestSnapshotOnly !== false, validOnly: opts.validOnly !== false },
+    options: { latestSnapshotOnly: opts.latestSnapshotOnly !== false },
     mode: p.mode === 'summary' ? 'summary' : 'rows',
     summary: p.mode === 'summary' ? p.summary : undefined,
   };

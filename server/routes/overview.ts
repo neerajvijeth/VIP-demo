@@ -3,7 +3,8 @@ import type { Entity, GlobalFilters, Group, Node, QueryOptions } from '../../sha
 import { EMPTY_FILTERS } from '../../shared/types';
 import { filtersToTree } from '../../shared/filters';
 import { WIDGETS, WIDGET_BY_ID, makeCtx, requiredColumns } from '../overviewWidgets';
-import { buildWhere, BuilderError } from '../sqlBuilder';
+import { BuilderError } from '../sqlBuilder';
+import { cleanExtras, widgetScope } from '../overviewScope';
 import { canonicalSource } from '../overviewSource';
 import { createLimiter, query } from '../db';
 import { userToken } from '../auth';
@@ -36,7 +37,8 @@ overviewRouter.post('/widgets', async (req, res, next) => {
     const { filters, options, widgets, fresh } = req.body ?? {};
     if (!Array.isArray(widgets) || !widgets.length || widgets.length > 50) throw new BuilderError('widgets must be a non-empty array');
     const f: GlobalFilters = { ...EMPTY_FILTERS, ...(filters ?? {}) };
-    const opts: QueryOptions = { latestSnapshotOnly: options?.latestSnapshotOnly !== false, validOnly: options?.validOnly !== false };
+    const opts: QueryOptions = { latestSnapshotOnly: options?.latestSnapshotOnly !== false };
+    const extras = cleanExtras(f.extra); // reject bad filters once, up front (400), instead of failing every card
     const full = filtersToTree(f);
     const token = userToken(req);
     const scope = scopeOf(token);
@@ -59,7 +61,7 @@ overviewRouter.post('/widgets', async (req, res, next) => {
           if (missing.length) return [def.id, { unavailable: `Not available: this table has no column ${missing.map((m) => '“' + m + '”').join(', ')}. Map it with COLUMN_MAP if it is named differently.` }] as const;
           try {
             const { tree, ignored } = pruneTree(def.entity, full);
-            const { where, params } = buildWhere(def.entity, tree, opts);
+            const { where, params } = widgetScope(def.entity, tree, extras, opts);
             const sql = def.sql(makeCtx(canonicalSource(def.entity), where));
             const run = () => query(sql, params, { userToken: token, signal: ac.signal });
             const rows = await cached(`w|${scope}|${sql}|${JSON.stringify(params)}`, run, { fresh: !!fresh });
