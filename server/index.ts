@@ -14,6 +14,7 @@ import { overviewRouter } from './routes/overview';
 import { kpisRouter } from './routes/kpis';
 import { genieRouter } from './routes/genie';
 import { customRouter } from './routes/custom';
+import { savedRouter } from './routes/saved';
 import { hasLiveColumns } from './fieldCatalog';
 import { ensureFreshSchema } from './schema';
 import { userToken } from './auth';
@@ -54,6 +55,7 @@ app.use('/api/overview', overviewRouter);
 app.use('/api/kpis', kpisRouter);
 app.use('/api/genie', genieRouter);
 app.use('/api/custom', customRouter);
+app.use('/api/saved', savedRouter);
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 
 // Static SPA (built client)
@@ -65,7 +67,7 @@ if (fs.existsSync(clientDir)) {
 
 const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   if (res.headersSent) return void res.end();
-  if (err instanceof BuilderError) return void res.status(400).json({ error: err.message });
+  if (err instanceof BuilderError) return void res.status((err as any).status ?? 400).json({ error: err.message });
   if (err?.type === 'entity.too.large') return void res.status(413).json({ error: 'Request body too large' });
   if (err instanceof SyntaxError) return void res.status(400).json({ error: 'Invalid JSON' });
   const status = typeof err?.status === 'number' ? err.status : 500;

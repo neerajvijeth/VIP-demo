@@ -1,4 +1,9 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { BookmarkPlus, Save } from 'lucide-react';
+import { Modal } from '@/components/ui/overlay';
+import { SavedApi, useMe, type SavedSql } from '@/lib/savedQueries';
 import { useQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { BookOpen, ChevronDown, ChevronRight, Clock, Copy, Download, Eraser, Loader2, Play, ShieldCheck, Square } from 'lucide-react';
@@ -85,6 +90,32 @@ export default function SqlPage() {
   const { sql, setSql, maxRows, setMaxRows, run, cancel, running, result, error, history, clearHistory } = useCustomSql();
   const env = useQuery({ queryKey: ['env'], queryFn: Api.env, staleTime: Infinity });
   const area = useRef<HTMLTextAreaElement>(null);
+  const [sp, setSp] = useSearchParams();
+  const qc = useQueryClient();
+  const me = useMe();
+  const [loaded, setLoaded] = useState<SavedSql | null>(null);
+  const [versions, setVersions] = useState<{ version: number }[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ name: '', description: '', visibility: 'private' });
+  const qid = sp.get('q');
+  const refresh = () => qc.invalidateQueries({ queryKey: ['saved-sql'] });
+  useEffect(() => {
+    if (!qid) { setLoaded(null); return; }
+    SavedApi.list().then((l) => { const q = l.find((x) => x.id === qid); if (q) { setLoaded(q); setSql(q.sql); SavedApi.versions(q.id).then(setVersions).catch(() => undefined); } }).catch((e) => toast.error('Could not open the saved query', e.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qid]);
+  const mine = !!loaded && loaded.owner === me.data;
+  const saveNew = async () => {
+    try { const q = await SavedApi.create({ ...form, sql }); await refresh(); setSaving(false); setSp({ q: q.id }); toast.success('Query saved', `“${q.name}” is in Saved views.`); } catch (e: any) { toast.error('Could not save', e.message); }
+  };
+  const updateSaved = async () => {
+    if (!loaded) return;
+    try { const q = await SavedApi.update(loaded.id, { sql }); setLoaded(q); setVersions(await SavedApi.versions(q.id)); await refresh(); toast.success(q.version === loaded.version ? 'No changes to save' : `Saved as v${q.version}`); } catch (e: any) { toast.error('Could not update', e.message); }
+  };
+  const rollbackTo = async (v: number) => {
+    if (!loaded) return;
+    try { const q = await SavedApi.rollback(loaded.id, v); setLoaded(q); setSql(q.sql); setVersions(await SavedApi.versions(q.id)); await refresh(); toast.success(`Restored v${v} as v${q.version}`); } catch (e: any) { toast.error('Could not roll back', e.message); }
+  };
   const catalog = env.data?.catalog ?? 'workspace';
   const schema = env.data?.schema ?? 'default';
   const examples = makeExamples(catalog, schema);
@@ -128,6 +159,14 @@ export default function SqlPage() {
               <div className="flex items-center gap-1.5">
                 <Button size="sm" variant="ghost" onClick={() => { void navigator.clipboard?.writeText(sql); toast.info('SQL copied'); }} disabled={!sql}><Copy size={13} /> Copy</Button>
                 <Button size="sm" variant="ghost" onClick={() => setSql('')} disabled={!sql}><Eraser size={13} /> Clear</Button>
+                {loaded && mine && <Button size="sm" variant="ghost" onClick={() => void updateSaved()} disabled={!sql.trim()}><Save size={13} /> Update “{loaded.name}” (v{loaded.version})</Button>}
+                {loaded && mine && versions.length > 1 && (
+                  <NativeSelect className="h-8 text-xs" value="" aria-label="Restore a version" onChange={(e) => e.target.value && void rollbackTo(Number(e.target.value))}>
+                    <option value="">Versions…</option>
+                    {versions.filter((v) => v.version !== loaded.version).map((v) => <option key={v.version} value={v.version}>Restore v{v.version}</option>)}
+                  </NativeSelect>
+                )}
+                <Button size="sm" variant="ghost" onClick={() => { setForm({ name: loaded ? `${loaded.name} (copy)` : '', description: '', visibility: 'private' }); setSaving(true); }} disabled={!sql.trim()}><BookmarkPlus size={13} /> Save query</Button>
               </div>
             </div>
             <textarea
@@ -208,6 +247,15 @@ export default function SqlPage() {
           </Card>
         </aside>
       </div>
+      <Modal open={saving} onOpenChange={setSaving} title="Save query">
+        <div className="space-y-3">
+          <label className="block text-xs font-medium">Name<Input autoFocus className="mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} maxLength={120} placeholder="e.g. Servers with open KEV findings" /></label>
+          <label className="block text-xs font-medium">Description<Input className="mt-1" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional" /></label>
+          <label className="block text-xs font-medium">Visibility<NativeSelect className="mt-1 w-full" value={form.visibility} onChange={(e) => setForm({ ...form, visibility: e.target.value })}><option value="private">Private (only me)</option><option value="team">Team (everyone can open it)</option></NativeSelect></label>
+          <p className="text-[11px] text-muted-foreground">Read-only SQL only. The same safety checks as the Run button apply when saving.</p>
+          <div className="flex justify-end gap-2"><Button variant="ghost" onClick={() => setSaving(false)}>Cancel</Button><Button variant="primary" disabled={!form.name.trim()} onClick={() => void saveNew()}>Save</Button></div>
+        </div>
+      </Modal>
     </div>
   );
 }
