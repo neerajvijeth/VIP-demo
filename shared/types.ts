@@ -68,8 +68,6 @@ export interface GlobalFilters {
   priority?: string[];
   /** OS family (asset os_type) */
   os_family?: string[];
-  /** known-exploited flag on findings */
-  kev?: 'all' | 'yes' | 'no';
   /** filters on any other column; AND-ed with everything else */
   extra?: ExtraFilter[];
 }
@@ -84,7 +82,6 @@ export const EMPTY_FILTERS: GlobalFilters = {
   device_type: [],
   priority: [],
   os_family: [],
-  kev: 'all',
   extra: [],
 };
 

@@ -121,7 +121,7 @@ const SCENARIOS: Array<[string, Partial<typeof EMPTY_FILTERS>, string, string]> 
   ['asset criticality = Critical', { criticality: ['Critical'] }, `a.criticality = 'Critical'`, 'true'],
   ['VOC priority = P1', { priority: ['P1'] }, 'true', `o.priority_code = 'P1'`],
   ['OS family = Linux', { os_family: ['Linux'] }, `a.os_type = 'Linux'`, 'true'],
-  ['KEV = yes', { kev: 'yes' }, 'true', 'coalesce(o.kev_flag, false)'],
+  ['KEV (added filter) = yes', { extra: [{ id: 'k', entity: 'vulnerabilities', condition: { type: 'condition', field: 'kev_flag', operator: 'is true', value: null, not: false } }] }, 'true', 'coalesce(o.kev_flag, false)'],
 ];
 
 run('executive sections: every number responds to every filter (demo data vs independent SQL)', () => {

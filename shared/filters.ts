@@ -19,7 +19,7 @@ export function filtersToTree(f: GlobalFilters): Group {
 }
 
 /**
- * VOC priority, OS family and KEV are filters on a column that lives on ONE table (findings, assets, findings).
+ * VOC priority and OS family are filters on a column that lives on ONE table (findings, assets).
  * They are expressed as bridge-aware filters, so every card responds to them: a finding-level filter on an asset card keeps
  * assets that have an open matching finding, an asset-level filter on a finding card keeps findings on matching assets.
  */
@@ -30,10 +30,9 @@ export function derivedExtras(f: GlobalFilters): ExtraFilter[] {
   };
   list('priority_code', 'vulnerabilities', f.priority, 'f:priority');
   list('os_type', 'assets', f.os_family, 'f:os_family');
-  if (f.kev === 'yes' || f.kev === 'no') out.push({ id: 'f:kev', entity: 'vulnerabilities', condition: { type: 'condition', field: L('kev_flag'), operator: 'is true', value: null, not: f.kev === 'no' } });
   return out;
 }
 
 export const countActiveFilters = (f: GlobalFilters) =>
   FILTER_FIELDS.reduce((n, k) => n + (f[k].length ? 1 : 0), 0) + (f.internet_exposed !== 'all' ? 1 : 0) + (f.extra?.length ?? 0)
-  + (f.priority?.length ? 1 : 0) + (f.os_family?.length ? 1 : 0) + (f.kev && f.kev !== 'all' ? 1 : 0);
+  + (f.priority?.length ? 1 : 0) + (f.os_family?.length ? 1 : 0);

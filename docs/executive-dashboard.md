@@ -18,10 +18,10 @@ Added below the headline KPIs of the Overview page. Only the executive dashboard
 
 ## Global filters
 
-Business unit, Region, Country, Criticality, Asset class, Device type, Internet exposed and **VOC priority, OS family, KEV** (new), plus "Add filter" on any column. Every new widget reads the same filter state; nothing is cached or hardcoded.
+Business unit, Region, Country, Criticality, Asset class, Device type, Internet exposed and **VOC priority and OS family** (new), plus "Add filter" on any column (for example KEV flag). Every new widget reads the same filter state; nothing is cached or hardcoded.
 
 A filter on a column that lives on one table is bridged through the asset id:
-- VOC priority (`priority_code`) and KEV (`kev_flag`) are finding-level: finding cards filter directly; asset cards keep assets that have an **open matching finding** (so "Total unique assets" with KEV = Yes counts assets with a KEV finding).
+- VOC priority (`priority_code`) and any finding-level column you add, such as `kev_flag`, are finding-level: finding cards filter directly; asset cards keep assets that have an **open matching finding** (so "Total unique assets" with KEV = Yes counts assets with a KEV finding).
 - OS family (asset `os_type`) is asset-level: asset cards filter directly; finding cards keep findings on matching assets.
 - Trends cannot be filtered (the KPI table has no dimensions); the page says so.
 

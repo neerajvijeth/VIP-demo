@@ -73,17 +73,19 @@ describe('score bands', () => {
 });
 
 describe('the three new global filters respond on every widget', () => {
-  it('translate to bridge-aware filters (priority and KEV on findings, OS family on assets)', () => {
-    const e = derivedExtras({ ...EMPTY_FILTERS, priority: ['P1', 'P2'], os_family: ['Linux'], kev: 'yes' });
-    expect(e.map((x) => [x.entity, x.condition.field, x.condition.operator])).toEqual([['vulnerabilities', 'priority_code', 'is one of'], ['assets', 'os_type', 'is'], ['vulnerabilities', 'kev_flag', 'is true']]);
-    expect(derivedExtras({ ...EMPTY_FILTERS, kev: 'no' })[0].condition.not).toBe(true);
+  it('VOC priority and OS family translate to bridge-aware filters; there is no KEV control by default', () => {
+    const e = derivedExtras({ ...EMPTY_FILTERS, priority: ['P1', 'P2'], os_family: ['Linux'] });
+    expect(e.map((x) => [x.entity, x.condition.field, x.condition.operator])).toEqual([['vulnerabilities', 'priority_code', 'is one of'], ['assets', 'os_type', 'is']]);
     expect(derivedExtras(EMPTY_FILTERS)).toEqual([]);
+    expect('kev' in EMPTY_FILTERS).toBe(false);
   });
   it('asset cards bridge a finding-level filter; finding cards bridge an asset-level filter', () => {
     const tree = { type: 'group', op: 'AND', not: false, children: [] } as const;
-    const f = derivedExtras({ ...EMPTY_FILTERS, priority: ['P1'], os_family: ['Linux'], kev: 'yes' });
+    // KEV is available through "Add filter" on kev_flag (a finding-level column)
+    const kev = { id: 'kev', entity: 'vulnerabilities' as const, condition: { type: 'condition' as const, field: 'kev_flag', operator: 'is true', value: null, not: false } };
+    const f = [...derivedExtras({ ...EMPTY_FILTERS, priority: ['P1'], os_family: ['Linux'] }), kev];
     const onAssets = widgetScope('assets', tree as any, f, { latestSnapshotOnly: true });
-    expect(onAssets.where).toMatch(/`gold_asset_id` IN \(SELECT `gold_asset_id` FROM \(SELECT f\.\*/); // priority and KEV
+    expect(onAssets.where).toMatch(/`gold_asset_id` IN \(SELECT `gold_asset_id` FROM \(SELECT f\.\*/); // priority and the KEV filter
     expect(onAssets.where).toContain('`os_type`');                                                       // OS family direct
     const onFindings = widgetScope('vulnerabilities', tree as any, f, { latestSnapshotOnly: true });
     expect(onFindings.where).toMatch(/`gold_asset_id` IN \(SELECT `gold_asset_id` FROM \(SELECT \* EXCEPT \(_rn\)/); // OS family
