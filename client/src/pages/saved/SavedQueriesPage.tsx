@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { BarChart3, Copy, FolderOpen, Pencil, Search, Trash2, Users } from 'lucide-react';
+import { BarChart3, ChevronDown, ChevronUp, Copy, FolderOpen, Pencil, Search, Trash2, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badges';
 import { Button, Card, ErrorPanel, Input, Skeleton } from '@/components/ui/primitives';
 import { SavedApi, kindLabel, useMe, useSavedSql, type SavedSql } from '@/lib/savedQueries';
@@ -68,7 +68,10 @@ export default function SavedQueriesPage() {
                 return (
                   <Fragment key={q.id}>
                     <tr className="border-b border-border/60 hover:bg-muted/40">
-                      <td className="px-4 py-2.5"><button className="text-left font-medium hover:underline" onClick={() => setOpen(open === q.id ? null : q.id)} aria-expanded={open === q.id} title="Show the SQL">{q.name}</button></td>
+                      <td className="px-4 py-2.5"><div className="flex items-center gap-1">
+                          <button className="text-left font-medium hover:underline" onClick={() => openIt(q)} title={q.kind === 'builder' ? 'Open with these filters applied' : 'Open in Custom SQL'}>{q.name}</button>
+                          <button className="rounded p-0.5 text-muted-foreground hover:text-foreground" onClick={() => setOpen(open === q.id ? null : q.id)} aria-expanded={open === q.id} aria-label={`${open === q.id ? 'Hide' : 'Show'} SQL for ${q.name}`} title="Show the SQL">{open === q.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</button>
+                        </div></td>
                       <td className="px-3 py-2.5"><Badge tone={q.kind === 'builder' ? 'primary' : 'neutral'}>{kindLabel(q)}</Badge></td>
                       <td className="hidden max-w-[22rem] truncate px-3 py-2.5 text-muted-foreground md:table-cell" title={q.description}>{q.description || '–'}</td>
                       <td className="px-3 py-2.5">{q.visibility === 'team' ? <Badge tone="primary">Team</Badge> : <Badge>Private</Badge>}</td>

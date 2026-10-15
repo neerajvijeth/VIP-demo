@@ -22,7 +22,7 @@ import { DetailDrawer } from './DetailDrawer';
 import { FinalSql } from './FinalSql';
 import { SelectedColumns } from './SelectedColumns';
 import { RefreshCw } from 'lucide-react';
-import { SavedQueriesMenu } from './SavedQueriesMenu';
+import { SavedQueriesMenu, SaveQueryButton } from './SavedQueriesMenu';
 
 const TOK_CLS: Record<Tok['k'], string> = { field: 'text-primary font-medium', op: 'text-muted-foreground', val: 'text-sev-medium', kw: 'text-foreground font-semibold', punct: 'text-sev-critical font-semibold' };
 
@@ -184,6 +184,7 @@ export function BuilderPage({ entity }: { entity: Entity }) {
               <Button variant="primary" onClick={() => st.run()} aria-label="Run query">
                 <Play size={14} /> Run query <span className="ml-1 hidden sm:inline"><Kbd>Ctrl ⏎</Kbd></span>
               </Button>
+              <SaveQueryButton entity={entity} disabled={!st.ran && !st.ranSummary} />
               <div className="flex min-w-[8rem] items-center gap-2 text-sm" aria-live="polite">
                 {count.isFetching || settling ? <Loader2 size={14} className="animate-spin text-muted-foreground" /> : null}
                 {count.data ? <span><b className="num">{fmtNum(count.data.total)}</b> <span className="text-muted-foreground">matching</span></span> : count.isError ? <span className="text-xs text-sev-critical" title={(count.error as Error).message}>count unavailable</span> : null}
