@@ -1,7 +1,10 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { keepPreviousData, useQueries } from '@tanstack/react-query';
 import { Api } from '@/lib/api';
+import type { GlobalFilters } from '@shared/types';
 import { useFilters } from '@/store/filters';
+import { useExecCross } from '@/store/execCross';
+import { L } from '@shared/semantics';
 
 export type Row = Record<string, any>;
 /** One request per row of the page so each row streams in as soon as its queries finish. */
@@ -9,6 +12,10 @@ export const BATCHES: Record<string, string[]> = {
   kpis: ['kpiTotalAssets', 'kpiOpenVulns', 'kpiCritHigh', 'kpiKev', 'kpiSla', 'kpiExposedCritHigh'],
   dist: ['severityDonut', 'slaStatus', 'overdueBuckets', 'ageBuckets'],
   tops: ['topAssets', 'topVulns', 'topSoftware'],
+  execAssets: ['execTotals', 'execByClass', 'execServersByOs'],
+  execBands: ['execServerBands', 'execServerKpis'],
+  execApps: ['execAppsByCount', 'execAppsByScore'],
+  execServers: ['execTopServers'],
   breakdown: ['assetsByBusinessUnit', 'findingsByBusinessUnit', 'assetsByRegion', 'findingsByRegion'],
   inventory: ['riskByBusinessUnit', 'assetsByCriticality', 'assetsByClass', 'coverage', 'toolVisibility', 'eolAssets'],
 };
@@ -28,14 +35,18 @@ export interface WState {
 const Ctx = createContext<Record<string, WState>>({});
 export const useWidget = (id: string): WState => useContext(Ctx)[id] ?? { loading: true, fetching: true, refetch: () => undefined };
 
+/** Section 4 only: the application picked in Section 3 becomes one more (finding-level) filter. */
+const withSoftware = (f: GlobalFilters, software: string): GlobalFilters => ({ ...f, extra: [...(f.extra ?? []), { id: 'cross:software', entity: 'vulnerabilities', condition: { type: 'condition', field: L('software_name'), operator: 'is', value: software, not: false } }] });
+
 export function OverviewDataProvider({ children }: { children: ReactNode }) {
   const filters = useFilters((s) => s.filters);
   const options = useFilters((s) => s.options);
+  const software = useExecCross((s) => s.software);
   const names = Object.keys(BATCHES);
   const results = useQueries({
     queries: names.map((name) => ({
-      queryKey: ['widgets', name, filters, options],
-      queryFn: ({ signal }: { signal: AbortSignal }) => Api.widgets(BATCHES[name], filters, options, signal),
+      queryKey: ['widgets', name, filters, options, name === 'execServers' ? software : null],
+      queryFn: ({ signal }: { signal: AbortSignal }) => Api.widgets(BATCHES[name], name === 'execServers' && software ? withSoftware(filters, software) : filters, options, signal),
       placeholderData: keepPreviousData,
       staleTime: 5 * 60_000,
       retry: 0,

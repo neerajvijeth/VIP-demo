@@ -34,13 +34,19 @@ function assetsInner(): string {
 }
 
 /** Asset attributes the Overview filters / groups by; taken from the asset row for findings. */
-const ASSET_ATTRS = ['hostname', 'business_unit', 'region', 'country', 'criticality', 'asset_class', 'device_type', 'device_role', 'internet_exposed', 'domain', 'data_center'];
+export const ASSET_ATTRS = ['hostname', 'business_unit', 'region', 'country', 'criticality', 'asset_class', 'device_type', 'device_role', 'internet_exposed', 'domain', 'data_center', 'os_type', 'os_name', 'os_distribution'];
+
+/** Is `col` usable in this entity's source? Finding sources also carry the asset attributes above, even when the raw findings table lacks them. */
+export const columnAvailable = (entity: Entity, col: string): boolean =>
+  isSelectableColumn(entity, col) || (entity === 'vulnerabilities' && ASSET_ATTRS.some((a) => L(a) === col) && isSelectableColumn('assets', col));
 
 export function canonicalSource(entity: Entity): string {
   if (entity === 'assets') return `(${assetsInner()}) t`;
   const id = q(L('gold_asset_id'));
-  const attrs = ASSET_ATTRS.filter((a) => has('assets', a) && has('vulnerabilities', a));
-  const except = attrs.length ? ` EXCEPT (${attrs.map((a) => q(L(a))).join(', ')})` : '';
+  // every asset attribute the asset row has; those the findings table also carries are replaced (EXCEPT), the others are added
+  const attrs = ASSET_ATTRS.filter((a) => has('assets', a));
+  const dup = attrs.filter((a) => has('vulnerabilities', a));
+  const except = dup.length ? ` EXCEPT (${dup.map((a) => q(L(a))).join(', ')})` : '';
   const take = attrs.map((a) => `a.${q(L(a))}`);
   if (has('assets', 'criticality_normalization_method')) take.push(`a.${q(L('criticality_normalization_method'))} AS ${q('asset_criticality_method')}`);
   const snapJoin = has('assets', 'snapshot_date') && has('vulnerabilities', 'snapshot_date') ? ` AND a.${q(L('snapshot_date'))} = f.${q(L('snapshot_date'))}` : '';

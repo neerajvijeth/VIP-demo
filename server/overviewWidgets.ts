@@ -2,6 +2,7 @@ import type { Entity } from '../shared/types';
 import { L, semantics } from '../shared/semantics';
 import { quoteIdent } from './sqlBuilder';
 import { isSelectableColumn } from './fieldCatalog';
+import { bandSql } from '../shared/bands';
 
 /**
  * Widget registry for the Overview page. Every widget queries exactly ONE table.
@@ -18,6 +19,8 @@ export interface WidgetCtx {
   lit: (s: string) => string;
   /** predicate: finding is not in a closed state */
   open: () => string;
+  /** predicate for the executive sections: excludes mobile devices (os_type Android / iOS) */
+  base: () => string;
   /** predicate: severity is one of the configured "high" severities */
   critHigh: () => string;
 }
@@ -48,8 +51,10 @@ export function makeCtx(table: string, where: string, used?: Set<string>): Widge
     open: () => {
       const names = ['te_state', 'df_status'].filter((n) => isSelectableColumn('vulnerabilities', L(n)));
       const st = `UPPER(COALESCE(${(names.length ? names : ['te_state']).map(c).join(', ')}))`;
-      return `(${st} IS NOT NULL AND ${st} NOT IN (${closed.map(sqlLit).join(', ')}))`;
+      const notFixed = isSelectableColumn('vulnerabilities', L('df_status')) ? ` AND COALESCE(UPPER(${c('df_status')}), '') <> 'FIXED'` : '';
+      return `(${st} IS NOT NULL AND ${st} NOT IN (${closed.map(sqlLit).join(', ')})${notFixed})`;
     },
+    base: () => `LOWER(COALESCE(CAST(${c('os_type')} AS STRING), '')) NOT IN ('android', 'ios')`,
     critHigh: () => `${c('severity')} IN (${values.highSeverities.map(sqlLit).join(', ')})`,
   };
 }
@@ -109,6 +114,54 @@ export const WIDGETS: WidgetDef[] = [
   a('toolVisibility', (x) => `SELECT ${lab(x.c('tool_visibility'))} AS label, COUNT(DISTINCT ${x.c('gold_asset_id')}) AS value FROM ${x.table} ${x.where} GROUP BY 1`),
   v('eolAssets', (x) => `SELECT COUNT(DISTINCT CASE WHEN ${x.c('df_end_of_support_status')} = ${x.lit(semantics().values.eos)} THEN ${x.c('gold_asset_id')} END) AS eos, COUNT(DISTINCT CASE WHEN ${x.c('df_end_of_support_status')} = ${x.lit(semantics().values.upcomingEos)} THEN ${x.c('gold_asset_id')} END) AS upcoming FROM ${x.table} ${x.where} AND ${x.open()}`),
 ];
+
+// ============================================================================================================
+// Executive sections (asset overview / server score bands / top applications / top servers).
+// Base rules for every widget below: open findings only, latest snapshot (the page switch), no Android / iOS devices,
+// asset ids counted distinct, and a "unique vulnerability" is a distinct (asset, CVE) pair, CVE key = cve, else plugin CVE, else plugin id.
+// ============================================================================================================
+const SERVER = (x: WidgetCtx) => `LOWER(COALESCE(CAST(${x.c('asset_class')} AS STRING), '')) = 'server'`;
+const key = (x: WidgetCtx) => `COALESCE(${firstOf(x, ['cve', 'plugin_cve', 'plugin_id'])}, 'unknown')`;
+/** One row per (asset, vulnerability) with the worst score, KEV / SLA flags and best priority across its duplicate findings. */
+const pairs = (x: WidgetCtx, extraWhere = '', extraCols = '') =>
+  `SELECT ${x.c('gold_asset_id')} AS asset, ${key(x)} AS vkey, MAX(${x.c('final_score')}) AS score, MAX(CASE WHEN COALESCE(${x.c('kev_flag')}, false) = true THEN 1 ELSE 0 END) AS kev, MAX(CASE WHEN COALESCE(${x.c('sla_breached')}, false) = true THEN 1 ELSE 0 END) AS breached, MIN(${x.c('priority_rank')}) AS prank${extraCols} FROM ${x.table} ${x.where} AND ${x.open()} AND ${x.base()}${extraWhere} GROUP BY ${x.c('gold_asset_id')}, ${key(x)}`;
+/** OS label for the server chart: Windows Server by release (2012 R2, 2016, ...), Linux by distribution, else the OS name. */
+const osLabel = (x: WidgetCtx) => {
+  const name = `CAST(${x.c('os_name')} AS STRING)`;
+  const dist = isSelectableColumn('assets', L('os_distribution')) ? `NULLIF(CAST(${x.c('os_distribution')} AS STRING), '')` : 'NULL';
+  return `CASE WHEN ${name} RLIKE '(?i)windows server' THEN COALESCE(NULLIF(regexp_extract(${name}, '(?i)(windows server +[0-9]{4}( +r2)?)', 1), ''), 'Windows Server (other)')
+    WHEN LOWER(COALESCE(CAST(${x.c('os_type')} AS STRING), '')) = 'linux' THEN COALESCE(${dist}, NULLIF(${name}, ''), 'Linux (other)')
+    ELSE COALESCE(NULLIF(${name}, ''), 'Unknown') END`;
+};
+
+WIDGETS.push(
+  // ---- Section 1: asset overview and server classification ----
+  a('execTotals', (x) => `SELECT COUNT(DISTINCT ${x.c('gold_asset_id')}) AS total, COUNT(DISTINCT CASE WHEN ${SERVER(x)} THEN ${x.c('gold_asset_id')} END) AS servers FROM ${x.table} ${x.where} AND ${x.base()}`),
+  a('execByClass', (x) => `SELECT ${lab(x.c('asset_class'))} AS label, COUNT(DISTINCT ${x.c('gold_asset_id')}) AS value FROM ${x.table} ${x.where} AND ${x.base()} GROUP BY 1`),
+  a('execServersByOs', (x) => `SELECT ${osLabel(x)} AS label, COUNT(DISTINCT ${x.c('gold_asset_id')}) AS value FROM ${x.table} ${x.where} AND ${x.base()} AND ${SERVER(x)} GROUP BY 1 ORDER BY value DESC, label ASC`),
+
+  // ---- Section 2: server vulnerability score distribution (bands on final_score) ----
+  v('execServerBands', (x) => `SELECT band AS label, COUNT(*) AS value FROM (SELECT ${bandSql('score')} AS band FROM (${pairs(x, ` AND ${SERVER(x)}`)}) p) b WHERE band IS NOT NULL GROUP BY 1`),
+  v('execServerKpis', (x) => `SELECT COUNT(DISTINCT CASE WHEN kev = 1 THEN asset END) AS servers_kev, COUNT(DISTINCT CASE WHEN breached = 1 THEN asset END) AS servers_breach, COUNT(DISTINCT asset) AS servers_with_vulns, COUNT(*) AS unique_vulns, COUNT_IF(score IS NULL) AS no_score FROM (${pairs(x, ` AND ${SERVER(x)}`)}) p`),
+
+  // ---- Section 3: top applications (all assets) ----
+  ...(['Count', 'Score'] as const).map((by) =>
+    v(`execAppsBy${by}`, (x) => {
+      const sw = x.c('software_name');
+      const inner = pairs(x, ` AND ${sw} IS NOT NULL`, `, ${sw} AS software`).replace(`GROUP BY ${x.c('gold_asset_id')}, ${key(x)}`, `GROUP BY ${x.c('gold_asset_id')}, ${key(x)}, ${sw}`);
+      const order = by === 'Count' ? 'vulns DESC, assets DESC, max_score DESC NULLS LAST' : 'max_score DESC NULLS LAST, vulns DESC';
+      return `SELECT software AS software_name, COUNT(*) AS vulns, COUNT(DISTINCT asset) AS assets, SUM(kev) AS kev, MAX(score) AS max_score, MIN(prank) AS prank FROM (${inner}) p GROUP BY software ORDER BY ${order}, software ASC LIMIT 10`;
+    }),
+  ),
+
+  // ---- Section 4: top servers by open unique vulnerabilities ----
+  v('execTopServers', (x) => {
+    // the finding source exposes the asset's normalisation method as asset_criticality_method
+    const crit = `CASE WHEN ${x.c('criticality')} IS NULL${isSelectableColumn('assets', L('criticality_normalization_method')) ? " OR LOWER(COALESCE(`asset_criticality_method`, '')) LIKE '%default%'" : ''} THEN 'Unknown (defaulted)' ELSE ${x.c('criticality')} END`;
+    const inner = pairs(x, ` AND ${SERVER(x)}`, `, MAX(${x.c('hostname')}) AS hostname, MAX(${lab(osLabel(x))}) AS os, MAX(${lab(x.c('business_unit'))}) AS business_unit, MAX(${lab(x.c('region'))}) AS region, MAX(${crit}) AS criticality, MAX(CASE WHEN COALESCE(${x.c('internet_exposed')}, false) = true THEN 1 ELSE 0 END) AS internet`);
+    return `SELECT asset AS gold_asset_id, MAX(hostname) AS hostname, MAX(os) AS os, MAX(business_unit) AS business_unit, MAX(region) AS region, MAX(criticality) AS criticality, MAX(internet) AS internet, COUNT(*) AS total, COUNT_IF(${bandSql('score')} = 'Critical') AS critical, COUNT_IF(${bandSql('score')} = 'High') AS high, COUNT_IF(${bandSql('score')} = 'Medium') AS medium, COUNT_IF(${bandSql('score')} = 'Low') AS low, SUM(kev) AS kev, MAX(score) AS max_score FROM (${inner}) p GROUP BY asset ORDER BY total DESC, max_score DESC NULLS LAST, hostname ASC LIMIT 25`;
+  }),
+);
 
 export const WIDGET_BY_ID = new Map(WIDGETS.map((w) => [w.id, w]));
 

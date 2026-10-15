@@ -64,6 +64,12 @@ export interface GlobalFilters {
   internet_exposed: 'all' | 'yes' | 'no';
   asset_class: string[];
   device_type: string[];
+  /** VOC priority (priority_code), a finding-level field */
+  priority?: string[];
+  /** OS family (asset os_type) */
+  os_family?: string[];
+  /** known-exploited flag on findings */
+  kev?: 'all' | 'yes' | 'no';
   /** filters on any other column; AND-ed with everything else */
   extra?: ExtraFilter[];
 }
@@ -76,6 +82,9 @@ export const EMPTY_FILTERS: GlobalFilters = {
   internet_exposed: 'all',
   asset_class: [],
   device_type: [],
+  priority: [],
+  os_family: [],
+  kev: 'all',
   extra: [],
 };
 

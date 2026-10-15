@@ -172,7 +172,7 @@ export function KpiCard({ id, title, hint, pick, onClick, tone, series, goodWhen
   hint?: string;
   pick: (rows: Row[]) => { value: number; pct?: boolean; sub?: string };
   onClick?: () => void;
-  tone?: 'critical' | 'high' | 'primary';
+  tone?: 'critical' | 'high' | 'medium' | 'low' | 'primary';
   series?: { date: string; value: number | null }[];
   goodWhen?: 'up' | 'down' | 'neutral';
   icon?: ReactNode;
@@ -181,7 +181,8 @@ export function KpiCard({ id, title, hint, pick, onClick, tone, series, goodWhen
   const picked = w.rows ? pick(w.rows) : null;
   const shown = useCountUp(picked?.value ?? 0);
   const prev = series && series.length > 1 ? series[series.length - 2].value : null;
-  const color = tone === 'critical' ? 'hsl(var(--sev-critical))' : tone === 'high' ? 'hsl(var(--sev-high))' : 'hsl(var(--muted-foreground))';
+  const TONE: Record<string, string> = { critical: 'hsl(var(--sev-critical))', high: 'hsl(var(--sev-high))', medium: 'hsl(var(--sev-medium))', low: 'hsl(var(--sev-low))' };
+  const color = (tone && TONE[tone]) || 'hsl(var(--muted-foreground))';
 
   return (
     <Card className={cn('group relative flex flex-col justify-between p-4 transition-colors duration-150', onClick && 'cursor-pointer hover:border-foreground/30')} aria-busy={w.loading}>
@@ -196,7 +197,7 @@ export function KpiCard({ id, title, hint, pick, onClick, tone, series, goodWhen
           <div className="mt-2 text-xs text-sev-critical" title={w.error}>Failed to load</div>
         ) : picked ? (
           <>
-            <div className="font-display num mt-1 text-[44px] leading-[1.05]" style={tone ? { color: tone === 'critical' ? 'hsl(var(--sev-critical))' : 'hsl(var(--sev-high))' } : undefined}>
+            <div className="font-display num mt-1 text-[44px] leading-[1.05]" style={tone && TONE[tone] && (picked?.value ?? 0) > 0 ? { color: TONE[tone] } : undefined}>
               {picked.pct ? `${shown.toFixed(1)}%` : fmtNum(Math.round(shown))}
             </div>
             <div className="mt-1 flex min-h-4 items-center gap-2 text-[11px] text-muted-foreground">

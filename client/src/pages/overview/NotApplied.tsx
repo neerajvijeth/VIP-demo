@@ -24,6 +24,9 @@ export function useActiveFilters(): ActiveFilter[] {
   return useMemo(() => {
     const out: ActiveFilter[] = [];
     for (const [k, label] of FIXED) { const v = filters[k] as string[]; if (v?.length) out.push({ id: k, label, text: v.length > 2 ? `${v.slice(0, 2).join(', ')} +${v.length - 2}` : v.join(', ') }); }
+    if (filters.priority?.length) out.push({ id: 'priority', label: 'VOC priority', text: filters.priority.join(', ') });
+    if (filters.os_family?.length) out.push({ id: 'os_family', label: 'OS family', text: filters.os_family.join(', ') });
+    if (filters.kev && filters.kev !== 'all') out.push({ id: 'kev', label: 'KEV', text: filters.kev === 'yes' ? 'Yes' : 'No' });
     if (filters.internet_exposed !== 'all') out.push({ id: 'internet_exposed', label: 'Internet exposed', text: filters.internet_exposed === 'yes' ? 'Yes' : 'No' });
     for (const e of filters.extra ?? []) out.push({ id: e.id, label: fields.find((f) => f.entity === e.entity && f.key === e.condition.field)?.label ?? e.condition.field, text: valueText(e.condition), entity: e.entity });
     return out;

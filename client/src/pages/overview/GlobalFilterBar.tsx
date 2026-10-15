@@ -42,6 +42,12 @@ export function GlobalFilterBar() {
             className="w-[10.5rem]"
           />
         ))}
+        <ValuePicker multi label="VOC priority" placeholder="VOC priority" value={filters.priority ?? []} onChange={(v) => patch({ priority: v })} load={(q) => Api.values('vulnerabilities', L('priority_code'), q)} cacheKey={`vulnerabilities:${L('priority_code')}`} className="w-[10.5rem]" />
+        <ValuePicker multi label="OS family" placeholder="OS family" value={filters.os_family ?? []} onChange={(v) => patch({ os_family: v })} load={(q) => Api.values('assets', L('os_type'), q)} cacheKey={`assets:${L('os_type')}`} className="w-[10.5rem]" />
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">KEV</span>
+          <Segmented size="sm" ariaLabel="Known exploited" value={filters.kev ?? 'all'} onChange={(v) => patch({ kev: v })} options={[{ value: 'all', label: 'All' }, { value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]} />
+        </div>
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted-foreground">Internet exposed</span>
           <Segmented

@@ -1,4 +1,4 @@
-import { FILTER_FIELDS, GlobalFilters, Group, Node, emptyGroup } from './types';
+import { FILTER_FIELDS, GlobalFilters, Group, Node, emptyGroup, type ExtraFilter } from './types';
 import { L } from './semantics';
 
 /** Turns the Overview global filters into a builder tree (AND across filters, OR within one). */
@@ -18,5 +18,22 @@ export function filtersToTree(f: GlobalFilters): Group {
   return { ...emptyGroup(), children };
 }
 
+/**
+ * VOC priority, OS family and KEV are filters on a column that lives on ONE table (findings, assets, findings).
+ * They are expressed as bridge-aware filters, so every card responds to them: a finding-level filter on an asset card keeps
+ * assets that have an open matching finding, an asset-level filter on a finding card keeps findings on matching assets.
+ */
+export function derivedExtras(f: GlobalFilters): ExtraFilter[] {
+  const out: ExtraFilter[] = [];
+  const list = (field: string, entity: 'assets' | 'vulnerabilities', vals: string[] | undefined, id: string) => {
+    if (vals?.length) out.push({ id, entity, condition: { type: 'condition', field: L(field), operator: vals.length === 1 ? 'is' : 'is one of', value: vals.length === 1 ? vals[0] : vals, not: false } });
+  };
+  list('priority_code', 'vulnerabilities', f.priority, 'f:priority');
+  list('os_type', 'assets', f.os_family, 'f:os_family');
+  if (f.kev === 'yes' || f.kev === 'no') out.push({ id: 'f:kev', entity: 'vulnerabilities', condition: { type: 'condition', field: L('kev_flag'), operator: 'is true', value: null, not: f.kev === 'no' } });
+  return out;
+}
+
 export const countActiveFilters = (f: GlobalFilters) =>
-  FILTER_FIELDS.reduce((n, k) => n + (f[k].length ? 1 : 0), 0) + (f.internet_exposed !== 'all' ? 1 : 0) + (f.extra?.length ?? 0);
+  FILTER_FIELDS.reduce((n, k) => n + (f[k].length ? 1 : 0), 0) + (f.internet_exposed !== 'all' ? 1 : 0) + (f.extra?.length ?? 0)
+  + (f.priority?.length ? 1 : 0) + (f.os_family?.length ? 1 : 0) + (f.kev && f.kev !== 'all' ? 1 : 0);

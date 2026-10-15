@@ -3,13 +3,14 @@ import { useSearchParams } from 'react-router-dom';
 import { useIsFetching, useQueryClient } from '@tanstack/react-query';
 import { Activity, Printer, RefreshCw } from 'lucide-react';
 import type { Condition, Entity } from '@shared/types';
-import { filtersToTree, countActiveFilters } from '@shared/filters';
+import { filtersToTree, countActiveFilters, derivedExtras } from '@shared/filters';
 import { Button } from '@/components/ui/primitives';
 import { SEVERITY_ORDER } from '@/components/ui/badges';
 import { GlobalFilterBar } from './GlobalFilterBar';
 import { OverviewDataProvider } from './data';
 import { TrendsRow, useKpiSeries, type Series } from './Trends';
 import { BreakdownCard } from './Breakdown';
+import { ExecSections } from './ExecSections';
 import { DataCheckBanner } from './DataCheckBanner';
 import { freshFlag } from '@/lib/api';
 import { BucketBars, CritBadge, Donut, KpiCard, Meter, SeverityStack, StackedBar, TopTable, WidgetCard, colorFor, num } from './widgets';
@@ -56,7 +57,7 @@ function PageBody() {
   const drill = (entity: Entity, ...extra: Condition[]) => {
     const base = filtersToTree(filters);
     // filters you added: the ones on this page's own table go along; a filter on the other table cannot be expressed here
-    const added = filters.extra ?? [];
+    const added = [...(filters.extra ?? []), ...derivedExtras(filters)];
     const own = added.filter((e) => e.entity === entity).map((e) => e.condition);
     const skipped = added.filter((e) => e.entity !== entity);
     if (skipped.length) toast.warning('Some filters were not carried over', `${skipped.map((e) => e.condition.field).join(', ')} ${skipped.length === 1 ? 'is a' : 'are'} ${entity === 'assets' ? 'finding' : 'asset'} field${skipped.length === 1 ? '' : 's'} and cannot be applied on the ${entity === 'assets' ? 'Assets' : 'Vulnerabilities'} page.`);
@@ -118,6 +119,8 @@ function PageBody() {
           <KpiCard id="kpiExposedCritHigh" title="Exposed, Crit/High" tone="high" pick={(r) => ({ value: num(r[0]?.value), sub: 'internet-facing, distinct assets' })} onClick={() => drill('vulnerabilities', ...OPEN(), CRIT_HIGH(), lcond('internet_exposed', 'is true'))} />
         </div>
       </Section>
+
+      <ExecSections drill={drill} openConds={OPEN} />
 
       <Section title="Vulnerability distribution">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">

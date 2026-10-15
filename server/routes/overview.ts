@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import type { Entity, GlobalFilters, Group, Node, QueryOptions } from '../../shared/types';
 import { EMPTY_FILTERS } from '../../shared/types';
-import { filtersToTree } from '../../shared/filters';
+import { derivedExtras, filtersToTree } from '../../shared/filters';
 import { WIDGETS, WIDGET_BY_ID, makeCtx, requiredColumns } from '../overviewWidgets';
 import { BuilderError } from '../sqlBuilder';
 import { cleanExtras, widgetScope } from '../overviewScope';
+import { columnAvailable } from '../overviewSource';
 import { canonicalSource } from '../overviewSource';
 import { createLimiter, query } from '../db';
 import { userToken } from '../auth';
@@ -38,7 +39,7 @@ overviewRouter.post('/widgets', async (req, res, next) => {
     if (!Array.isArray(widgets) || !widgets.length || widgets.length > 50) throw new BuilderError('widgets must be a non-empty array');
     const f: GlobalFilters = { ...EMPTY_FILTERS, ...(filters ?? {}) };
     const opts: QueryOptions = { latestSnapshotOnly: options?.latestSnapshotOnly !== false };
-    const extras = cleanExtras(f.extra); // reject bad filters once, up front (400), instead of failing every card
+    const extras = cleanExtras([...(f.extra ?? []), ...derivedExtras(f)]); // reject bad filters once, up front (400), instead of failing every card
     const full = filtersToTree(f);
     const token = userToken(req);
     const scope = scopeOf(token);
@@ -57,7 +58,7 @@ overviewRouter.post('/widgets', async (req, res, next) => {
           const t = Date.now();
           if (ac.signal.aborted) return [def.id, { error: 'Cancelled' }] as const;
           // Skip (instead of failing) when the data does not have a column this widget needs.
-          const missing = requiredColumns(def).filter((col) => !isSelectableColumn(def.entity, col));
+          const missing = requiredColumns(def).filter((col) => !columnAvailable(def.entity, col));
           if (missing.length) return [def.id, { unavailable: `Not available: this table has no column ${missing.map((m) => '“' + m + '”').join(', ')}. Map it with COLUMN_MAP if it is named differently.` }] as const;
           try {
             const { tree, ignored } = pruneTree(def.entity, full);
